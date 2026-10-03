@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mtrans-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "mtrans-job-photos" }
+  ]
+}

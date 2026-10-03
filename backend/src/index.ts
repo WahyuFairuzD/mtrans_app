@@ -1,9 +1,34 @@
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
+import { apiError } from './lib/response'
+import auth from './routes/auth'
+import type { AppEnv } from './types'
 
-const app = new Hono()
+const app = new Hono<AppEnv>()
 
-app.get('/', (c) => {
-  return c.text('Hello Hono!')
+app.use(
+  '*',
+  cors({
+    origin: '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Authorization', 'Content-Type'],
+    maxAge: 86400,
+  }),
+)
+
+app.get('/', (c) => c.json({ name: 'mtrans-api', status: 'ok' }))
+
+app.route('/auth', auth)
+
+app.notFound((c) => c.json(apiError('NOT_FOUND', 'Endpoint tidak ditemukan.'), 404))
+
+app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return c.json(apiError('BAD_REQUEST', err.message), err.status)
+  }
+  console.error(err)
+  return c.json(apiError('INTERNAL_ERROR', 'Terjadi kesalahan pada server.'), 500)
 })
 
 export default app

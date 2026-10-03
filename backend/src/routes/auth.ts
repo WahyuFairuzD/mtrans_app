@@ -1,0 +1,218 @@
+import { zValidator } from '@hono/zod-validator'
+import type { Session } from '@supabase/supabase-js'
+import { Hono } from 'hono'
+import { z } from 'zod'
+import { apiError } from '../lib/response'
+import { adminClient, anonClient, getProfile } from '../lib/supabase'
+import { requireAuth } from '../middleware/auth'
+import type { AppEnv, AuthUser, Profile } from '../types'
+
+const auth = new Hono<AppEnv>()
+
+const registerSchema = z.object({
+  full_name: z
+    .string({ required_error: 'Nama lengkap wajib diisi.' })
+    .trim()
+    .min(2, 'Nama lengkap minimal 2 karakter.')
+    .max(100, 'Nama lengkap maksimal 100 karakter.'),
+  email: z
+    .string({ required_error: 'Email wajib diisi.' })
+    .trim()
+    .toLowerCase()
+    .email('Format email tidak valid.'),
+  password: z
+    .string({ required_error: 'Password wajib diisi.' })
+    .min(8, 'Password minimal 8 karakter.')
+    .max(72, 'Password maksimal 72 karakter.'),
+  phone: z
+    .string()
+    .trim()
+    .min(8, 'Nomor HP minimal 8 digit.')
+    .max(20, 'Nomor HP maksimal 20 karakter.')
+    .optional(),
+})
+
+const loginSchema = z.object({
+  email: z
+    .string({ required_error: 'Email wajib diisi.' })
+    .trim()
+    .toLowerCase()
+    .email('Format email tidak valid.'),
+  password: z
+    .string({ required_error: 'Password wajib diisi.' })
+    .min(1, 'Password wajib diisi.'),
+})
+
+const refreshSchema = z.object({
+  refresh_token: z
+    .string({ required_error: 'refresh_token wajib diisi.' })
+    .min(1, 'refresh_token wajib diisi.'),
+})
+
+const validate = <T extends z.ZodTypeAny>(schema: T) =>
+  zValidator('json', schema, (result, c) => {
+    if (!result.success) {
+      const message = result.error.issues[0]?.message ?? 'Data tidak valid.'
+      return c.json(apiError('VALIDATION_ERROR', message), 400)
+    }
+  })
+
+function toAuthUser(profile: Profile, email: string): AuthUser {
+  return {
+    id: profile.id,
+    email,
+    full_name: profile.full_name,
+    phone: profile.phone,
+    role: profile.role,
+  }
+}
+
+function sessionPayload(session: Session, user: AuthUser) {
+  return {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    token_type: 'bearer',
+    expires_in: session.expires_in,
+    expires_at: session.expires_at ?? null,
+    user,
+  }
+}
+
+auth.post('/register', validate(registerSchema), async (c) => {
+  const body = c.req.valid('json')
+  const admin = adminClient(c.env)
+
+  const { data: created, error } = await admin.auth.admin.createUser({
+    email: body.email,
+    password: body.password,
+    email_confirm: true,
+    user_metadata: { full_name: body.full_name },
+  })
+
+  if (error || !created.user) {
+    const taken =
+      error?.code === 'email_exists' ||
+      /already|registered/i.test(error?.message ?? '')
+
+    if (taken) {
+      return c.json(apiError('EMAIL_TAKEN', 'Email sudah terdaftar.'), 409)
+    }
+
+    console.error('createUser gagal:', error)
+    const clientError = (error?.status ?? 500) < 500
+    return c.json(
+      apiError(
+        clientError ? 'REGISTER_FAILED' : 'INTERNAL_ERROR',
+        clientError
+          ? 'Pendaftaran ditolak. Periksa kembali email dan password kamu.'
+          : 'Gagal membuat akun. Coba lagi nanti.',
+      ),
+      clientError ? 400 : 500,
+    )
+  }
+
+  const { error: profileError } = await admin.from('profiles').insert({
+    id: created.user.id,
+    full_name: body.full_name,
+    phone: body.phone ?? null,
+    role: 'pegawai',
+  })
+
+  if (profileError) {
+    console.error('insert profile gagal:', profileError)
+    await admin.auth.admin.deleteUser(created.user.id)
+    return c.json(
+      apiError('INTERNAL_ERROR', 'Gagal membuat akun. Coba lagi nanti.'),
+      500,
+    )
+  }
+
+  return c.json(
+    {
+      message: 'Akun berhasil dibuat.',
+      user: {
+        id: created.user.id,
+        email: body.email,
+        full_name: body.full_name,
+        phone: body.phone ?? null,
+        role: 'pegawai',
+      },
+    },
+    201,
+  )
+})
+
+auth.post('/login', validate(loginSchema), async (c) => {
+  const { email, password } = c.req.valid('json')
+
+  const { data, error } = await anonClient(c.env).auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  if (error || !data.session || !data.user) {
+    if (error?.status === 429) {
+      return c.json(
+        apiError('RATE_LIMITED', 'Terlalu banyak percobaan. Coba lagi sebentar.'),
+        429,
+      )
+    }
+    return c.json(apiError('INVALID_CREDENTIALS', 'Email atau password salah.'), 401)
+  }
+
+  const admin = adminClient(c.env)
+  const profile = await getProfile(admin, data.user.id)
+
+  if (!profile || !profile.is_active) {
+    await admin.auth.admin.signOut(data.session.access_token, 'local')
+    return c.json(
+      apiError('FORBIDDEN', 'Akun tidak aktif atau profil tidak ditemukan.'),
+      403,
+    )
+  }
+
+  return c.json(
+    sessionPayload(data.session, toAuthUser(profile, data.user.email ?? email)),
+  )
+})
+
+auth.post('/refresh', validate(refreshSchema), async (c) => {
+  const { refresh_token } = c.req.valid('json')
+
+  const { data, error } = await anonClient(c.env).auth.refreshSession({
+    refresh_token,
+  })
+
+  if (error || !data.session || !data.user) {
+    return c.json(
+      apiError('UNAUTHORIZED', 'Sesi sudah berakhir, silakan login lagi.'),
+      401,
+    )
+  }
+
+  const admin = adminClient(c.env)
+  const profile = await getProfile(admin, data.user.id)
+
+  if (!profile || !profile.is_active) {
+    await admin.auth.admin.signOut(data.session.access_token, 'local')
+    return c.json(
+      apiError('FORBIDDEN', 'Akun tidak aktif atau profil tidak ditemukan.'),
+      403,
+    )
+  }
+
+  return c.json(
+    sessionPayload(data.session, toAuthUser(profile, data.user.email ?? '')),
+  )
+})
+
+auth.get('/me', requireAuth, (c) => {
+  return c.json({ user: c.get('user') })
+})
+
+auth.post('/logout', requireAuth, async (c) => {
+  await adminClient(c.env).auth.admin.signOut(c.get('token'), 'local')
+  return c.json({ message: 'Berhasil logout.' })
+})
+
+export default auth
