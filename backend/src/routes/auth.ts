@@ -9,17 +9,19 @@ import type { AppEnv, AuthUser, Profile } from '../types'
 
 const auth = new Hono<AppEnv>()
 
+const emailField = z
+  .string({ required_error: 'Email wajib diisi.' })
+  .trim()
+  .toLowerCase()
+  .email('Format email tidak valid.')
+
 const registerSchema = z.object({
   full_name: z
     .string({ required_error: 'Nama lengkap wajib diisi.' })
     .trim()
     .min(2, 'Nama lengkap minimal 2 karakter.')
     .max(100, 'Nama lengkap maksimal 100 karakter.'),
-  email: z
-    .string({ required_error: 'Email wajib diisi.' })
-    .trim()
-    .toLowerCase()
-    .email('Format email tidak valid.'),
+  email: emailField,
   password: z
     .string({ required_error: 'Password wajib diisi.' })
     .min(8, 'Password minimal 8 karakter.')
@@ -33,15 +35,21 @@ const registerSchema = z.object({
 })
 
 const loginSchema = z.object({
-  email: z
-    .string({ required_error: 'Email wajib diisi.' })
-    .trim()
-    .toLowerCase()
-    .email('Format email tidak valid.'),
+  email: emailField,
   password: z
     .string({ required_error: 'Password wajib diisi.' })
     .min(1, 'Password wajib diisi.'),
 })
+
+const verifySchema = z.object({
+  email: emailField,
+  code: z
+    .string({ required_error: 'Kode verifikasi wajib diisi.' })
+    .trim()
+    .regex(/^\d{6,10}$/, 'Kode verifikasi harus berupa angka.'),
+})
+
+const resendSchema = z.object({ email: emailField })
 
 const refreshSchema = z.object({
   refresh_token: z
@@ -78,28 +86,48 @@ function sessionPayload(session: Session, user: AuthUser) {
   }
 }
 
+const isEmailRateLimited = (error: { status?: number; code?: string } | null) =>
+  error?.status === 429 || error?.code === 'over_email_send_rate_limit'
+
 auth.post('/register', validate(registerSchema), async (c) => {
   const body = c.req.valid('json')
-  const admin = adminClient(c.env)
 
-  const { data: created, error } = await admin.auth.admin.createUser({
+  const { data, error } = await anonClient(c.env).auth.signUp({
     email: body.email,
     password: body.password,
-    email_confirm: true,
-    user_metadata: { full_name: body.full_name },
+    options: {
+      data: {
+        full_name: body.full_name,
+        ...(body.phone ? { phone: body.phone } : {}),
+      },
+    },
   })
 
-  if (error || !created.user) {
-    const taken =
-      error?.code === 'email_exists' ||
-      /already|registered/i.test(error?.message ?? '')
-
-    if (taken) {
+  if (error) {
+    if (
+      error.code === 'email_exists' ||
+      error.code === 'user_already_exists' ||
+      /already|registered/i.test(error.message)
+    ) {
       return c.json(apiError('EMAIL_TAKEN', 'Email sudah terdaftar.'), 409)
     }
 
-    console.error('createUser gagal:', error)
-    const clientError = (error?.status ?? 500) < 500
+    if (isEmailRateLimited(error)) {
+      return c.json(
+        apiError('RATE_LIMITED', 'Terlalu banyak permintaan. Coba lagi sebentar.'),
+        429,
+      )
+    }
+
+    if (error.code === 'weak_password') {
+      return c.json(
+        apiError('VALIDATION_ERROR', 'Password terlalu lemah. Gunakan kombinasi yang lebih kuat.'),
+        400,
+      )
+    }
+
+    console.error('signUp gagal:', error)
+    const clientError = (error.status ?? 500) < 500
     return c.json(
       apiError(
         clientError ? 'REGISTER_FAILED' : 'INTERNAL_ERROR',
@@ -110,36 +138,91 @@ auth.post('/register', validate(registerSchema), async (c) => {
       clientError ? 400 : 500,
     )
   }
+  if (data.user && (data.user.identities?.length ?? 0) === 0) {
+    return c.json(apiError('EMAIL_TAKEN', 'Email sudah terdaftar.'), 409)
+  }
 
-  const { error: profileError } = await admin.from('profiles').insert({
-    id: created.user.id,
-    full_name: body.full_name,
-    phone: body.phone ?? null,
-    role: 'pegawai',
-  })
-
-  if (profileError) {
-    console.error('insert profile gagal:', profileError)
-    await admin.auth.admin.deleteUser(created.user.id)
+  if (data.session) {
+    console.error(
+      'Supabase mengembalikan sesi saat signUp. Aktifkan "Confirm email" di Authentication > Providers > Email.',
+    )
     return c.json(
-      apiError('INTERNAL_ERROR', 'Gagal membuat akun. Coba lagi nanti.'),
+      apiError('INTERNAL_ERROR', 'Verifikasi email belum dikonfigurasi di server.'),
       500,
     )
   }
 
   return c.json(
     {
-      message: 'Akun berhasil dibuat.',
-      user: {
-        id: created.user.id,
-        email: body.email,
-        full_name: body.full_name,
-        phone: body.phone ?? null,
-        role: 'pegawai',
-      },
+      message: 'Kode verifikasi sudah dikirim ke email kamu.',
+      email: body.email,
     },
     201,
   )
+})
+
+auth.post('/verify', validate(verifySchema), async (c) => {
+  const { email, code } = c.req.valid('json')
+
+  const { data, error } = await anonClient(c.env).auth.verifyOtp({
+    email,
+    token: code,
+    type: 'signup',
+  })
+
+  if (error || !data.session || !data.user) {
+    if (error?.status === 429) {
+      return c.json(
+        apiError('RATE_LIMITED', 'Terlalu banyak percobaan. Coba lagi sebentar.'),
+        429,
+      )
+    }
+    return c.json(apiError('INVALID_OTP', 'Kode salah atau sudah kedaluwarsa.'), 400)
+  }
+
+  const admin = adminClient(c.env)
+  const profile = await getProfile(admin, data.user.id)
+
+  if (!profile) {
+    console.error(
+      'Profil tidak terbentuk setelah verifikasi. Pastikan 002_otp_register.sql sudah dijalankan.',
+    )
+    return c.json(
+      apiError('INTERNAL_ERROR', 'Akun terverifikasi tetapi profil belum siap. Hubungi admin.'),
+      500,
+    )
+  }
+
+  if (!profile.is_active) {
+    await admin.auth.admin.signOut(data.session.access_token, 'local')
+    return c.json(apiError('FORBIDDEN', 'Akun kamu sudah dinonaktifkan.'), 403)
+  }
+
+  return c.json(
+    sessionPayload(data.session, toAuthUser(profile, data.user.email ?? email)),
+  )
+})
+
+auth.post('/resend', validate(resendSchema), async (c) => {
+  const { email } = c.req.valid('json')
+
+  const { error } = await anonClient(c.env).auth.resend({
+    type: 'signup',
+    email,
+  })
+
+  if (isEmailRateLimited(error)) {
+    return c.json(
+      apiError('RATE_LIMITED', 'Tunggu sebentar sebelum meminta kode lagi.'),
+      429,
+    )
+  }
+
+  if (error) console.error('resend gagal:', error)
+
+  return c.json({
+    message: 'Jika email terdaftar dan belum diverifikasi, kode baru sudah dikirim.',
+  })
 })
 
 auth.post('/login', validate(loginSchema), async (c) => {
@@ -151,6 +234,15 @@ auth.post('/login', validate(loginSchema), async (c) => {
   })
 
   if (error || !data.session || !data.user) {
+    if (error?.code === 'email_not_confirmed') {
+      return c.json(
+        apiError(
+          'EMAIL_NOT_VERIFIED',
+          'Email kamu belum diverifikasi. Masukkan kode OTP yang dikirim ke email.',
+        ),
+        403,
+      )
+    }
     if (error?.status === 429) {
       return c.json(
         apiError('RATE_LIMITED', 'Terlalu banyak percobaan. Coba lagi sebentar.'),

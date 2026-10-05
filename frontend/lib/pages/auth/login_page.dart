@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import 'register_page.dart';
+import 'verify_otp_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -36,14 +37,28 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
 
+    final email = _email.text.trim();
+
     try {
       await AuthService.instance.login(
-        email: _email.text.trim(),
+        email: email,
         password: _password.text,
       );
     } on AuthException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
+
+      if (e.isEmailNotVerified) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => VerifyOtpPage(
+              email: email,
+              sendCodeOnOpen: true,
+            ),
+          ),
+        );
+      } else {
+        setState(() => _error = e.message);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _error = 'Terjadi kesalahan. Coba lagi.');

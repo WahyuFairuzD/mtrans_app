@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import 'verify_otp_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -41,16 +42,22 @@ class _RegisterPageState extends State<RegisterPage> {
       _error = null;
     });
 
+    final email = _email.text.trim();
+
     try {
       await AuthService.instance.register(
         fullName: _name.text.trim(),
-        email: _email.text.trim(),
+        email: email,
         password: _password.text,
         phone: _phone.text.trim(),
       );
 
       if (!mounted) return;
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => VerifyOtpPage(email: email),
+        ),
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
@@ -92,7 +99,9 @@ class _RegisterPageState extends State<RegisterPage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
-                      'Akun baru otomatis terdaftar sebagai Petugas Cuci.',
+                      'Akun baru terdaftar sebagai Petugas Cuci. '
+                      'Kami akan mengirim kode verifikasi ke email kamu, '
+                      'jadi gunakan email yang aktif.',
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
                     const SizedBox(height: 20),
@@ -229,7 +238,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('Daftar'),
+                            : const Text('Daftar & Kirim Kode'),
                       ),
                     ),
                   ],
