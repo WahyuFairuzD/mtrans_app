@@ -8,8 +8,11 @@ import '../models/app_user.dart';
 class AuthException implements Exception {
   final String message;
   final int? statusCode;
+  final String? code;
 
-  const AuthException(this.message, {this.statusCode});
+  const AuthException(this.message, {this.statusCode, this.code});
+
+  bool get isEmailNotVerified => code == 'EMAIL_NOT_VERIFIED';
 
   @override
   String toString() => message;
@@ -24,7 +27,6 @@ class AuthService extends ChangeNotifier {
   static const _refreshKey = 'refresh_token';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: ApiConfig.baseUrl,
@@ -96,8 +98,30 @@ class AuthService extends ChangeNotifier {
     } on DioException catch (e) {
       throw _toException(e);
     }
+  }
 
-    await login(email: email, password: password);
+  Future<void> verifyOtp({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final res = await _dio.post(
+        '/auth/verify',
+        data: {'email': email, 'code': code},
+      );
+
+      await _applySession(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
+  }
+
+  Future<void> resendOtp(String email) async {
+    try {
+      await _dio.post('/auth/resend', data: {'email': email});
+    } on DioException catch (e) {
+      throw _toException(e);
+    }
   }
 
   Future<void> logout() async {
@@ -145,6 +169,7 @@ class AuthService extends ChangeNotifier {
       return true;
     } on DioException catch (e) {
       final status = e.response?.statusCode;
+
       if (status == 401 || status == 403) {
         await _clear();
       }
@@ -191,9 +216,15 @@ class AuthService extends ChangeNotifier {
     final data = e.response?.data;
 
     if (data is Map && data['error'] is Map) {
-      final message = (data['error'] as Map)['message'];
+      final error = data['error'] as Map;
+      final message = error['message'];
+
       if (message is String && message.isNotEmpty) {
-        return AuthException(message, statusCode: e.response?.statusCode);
+        return AuthException(
+          message,
+          statusCode: e.response?.statusCode,
+          code: error['code'] as String?,
+        );
       }
     }
 
