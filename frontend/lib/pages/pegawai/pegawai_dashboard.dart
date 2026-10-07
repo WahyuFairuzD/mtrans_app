@@ -4,6 +4,7 @@ import '../../models/bus_wash.dart';
 import '../../services/app_data.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bus_card.dart';
+import '../../widgets/load_notice.dart';
 import '../../widgets/stat_card.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
@@ -24,6 +25,10 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
     super.initState();
 
     _appData.addListener(_onDataChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _appData.refresh();
+    });
   }
 
   @override
@@ -39,53 +44,15 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
     setState(() {});
   }
 
-  bool _mine(BusWash bus) {
-    return bus.employees.any(
-      (employee) => employee.name == _appData.currentPetugas,
-    );
-  }
-
-  List<BusWash> _by(
-    List<WashStatus> statuses,
-  ) {
-    return _appData.buses
-        .where(
-          (bus) => _mine(bus) && statuses.contains(bus.status),
-        )
+  List<BusWash> _by(List<WashStatus> statuses) {
+    return _appData.operational
+        .where((bus) => statuses.contains(bus.status))
         .toList();
   }
 
-  void _update(
-    BusWash oldBus,
-    BusWash newBus,
-  ) {
-    _appData.updateBus(
-      oldBus,
-      newBus,
-    );
-  }
-
-  void _startWash(BusWash bus) {
-    final updatedBus = bus.copyWith(
-      status: WashStatus.dalamPengerjaan,
-      startTime: nowText(),
-    );
-
-    _update(
-      bus,
-      updatedBus,
-    );
-  }
-
-  void _finishWash(BusWash bus) {
-    final updatedBus = bus.copyWith(
-      status: WashStatus.menungguPemeriksaan,
-      endTime: nowText(),
-    );
-
-    _update(
-      bus,
-      updatedBus,
+  void _soon(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature belum tersedia.')),
     );
   }
 
@@ -93,22 +60,20 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
 
-    final waitingBuses = _by([
-      WashStatus.menungguDikerjakan,
-    ]);
+    final waitingBuses = _by([WashStatus.menungguDikerjakan]);
+    final workingBuses = _by([WashStatus.dalamPengerjaan]);
+    final inspectionBuses = _by([WashStatus.menungguPemeriksaan]);
 
-    final workingBuses = _by([
-      WashStatus.dalamPengerjaan,
-    ]);
+    final noTasks = waitingBuses.isEmpty &&
+        workingBuses.isEmpty &&
+        inspectionBuses.isEmpty;
 
-    final inspectionBuses = _by([
-      WashStatus.menungguPemeriksaan,
-    ]);
+    final showEmpty =
+        noTasks && _appData.loaded && _appData.error == null;
 
     return Scaffold(
       body: Stack(
         children: [
-          // ===== HEADER MERAH =====
           Positioned(
             top: 0,
             left: 0,
@@ -116,12 +81,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
             height: top + 190,
             child: Container(
               color: _headerRed,
-              padding: EdgeInsets.fromLTRB(
-                20,
-                top + 12,
-                20,
-                0,
-              ),
+              padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
               child: Stack(
                 children: [
                   Row(
@@ -136,9 +96,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                           color: Colors.white,
                         ),
                       ),
-
                       const Spacer(),
-
                       Image.asset(
                         _logoAsset,
                         height: 120,
@@ -146,7 +104,6 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                       ),
                     ],
                   ),
-
                   const Positioned(
                     left: 0,
                     bottom: 50,
@@ -161,9 +118,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-
                         SizedBox(height: 2),
-
                         Text(
                           'Kelola tugas pencucian bus kamu hari ini.',
                           style: TextStyle(
@@ -179,22 +134,13 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
             ),
           ),
 
-          // ===== ISI DASHBOARD =====
           Positioned.fill(
             child: RefreshIndicator(
-              onRefresh: () async {
-                setState(() {});
-              },
+              onRefresh: _appData.refresh,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  top + 150,
-                  20,
-                  96,
-                ),
+                padding: EdgeInsets.fromLTRB(20, top + 150, 20, 96),
                 children: [
-                  // ===== STATISTIK =====
                   StatGrid(
                     items: [
                       StatCard(
@@ -203,14 +149,12 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                         icon: Icons.access_time,
                         color: Colors.grey,
                       ),
-
                       StatCard(
                         number: '${workingBuses.length}',
                         title: 'Dikerjakan',
                         icon: Icons.autorenew,
                         color: Colors.orange,
                       ),
-
                       StatCard(
                         number: '${inspectionBuses.length}',
                         title: 'Pemeriksaan',
@@ -219,10 +163,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 28),
-
-                  // ===== TUGAS SAYA =====
                   const Text(
                     'Tugas Saya',
                     style: TextStyle(
@@ -233,9 +174,14 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
 
                   const SizedBox(height: 12),
 
-                  if (waitingBuses.isEmpty &&
-                      workingBuses.isEmpty &&
-                      inspectionBuses.isEmpty)
+                  LoadNotice(
+                    loading: _appData.loading,
+                    loaded: _appData.loaded,
+                    error: _appData.error,
+                    onRetry: _appData.refresh,
+                  ),
+
+                  if (showEmpty)
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -249,18 +195,12 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                             size: 42,
                             color: Colors.grey,
                           ),
-
                           SizedBox(height: 10),
-
                           Text(
                             'Tidak ada tugas saat ini.',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.w600),
                           ),
-
                           SizedBox(height: 4),
-
                           Text(
                             'Tugas yang diberikan kepada kamu akan muncul di sini.',
                             textAlign: TextAlign.center,
@@ -274,40 +214,32 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
 
                   ...waitingBuses.map(
                     (bus) => Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: 10,
-                      ),
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: _TaskCard(
                         bus: bus,
                         actionLabel: 'Mulai Cuci',
                         actionIcon: Icons.play_arrow,
-                        onAction: () => _startWash(bus),
+                        onAction: () => _soon('Mulai Cuci'),
                       ),
                     ),
                   ),
 
                   ...workingBuses.map(
                     (bus) => Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: 10,
-                      ),
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: _TaskCard(
                         bus: bus,
                         actionLabel: 'Selesai Cuci',
                         actionIcon: Icons.check,
-                        onAction: () => _finishWash(bus),
+                        onAction: () => _soon('Selesai Cuci'),
                       ),
                     ),
                   ),
 
                   ...inspectionBuses.map(
                     (bus) => Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: 10,
-                      ),
-                      child: BusCard(
-                        bus: bus,
-                      ),
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: BusCard(bus: bus),
                     ),
                   ),
                 ],
@@ -342,12 +274,8 @@ class _TaskCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            BusCard(
-              bus: bus,
-            ),
-
+            BusCard(bus: bus),
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
