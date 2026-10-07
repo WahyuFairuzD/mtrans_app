@@ -1,115 +1,75 @@
 import 'package:flutter/foundation.dart';
-
 import '../models/bus_wash.dart';
+import '../utils/wib.dart';
+import 'api_exception.dart';
+import 'auth_service.dart';
+import 'job_service.dart';
 
 class AppData extends ChangeNotifier {
-  AppData._();
+  AppData._() {
+    AuthService.instance.addListener(_onAuthChanged);
+  }
 
   static final AppData instance = AppData._();
 
-  // MASTER DATA BUS
+  List<BusWash> _buses = [];
+  bool _loading = false;
+  bool _loaded = false;
+  String? _error;
 
-  final List<String> masterUnits = [
-    'N 3456 MN',
-    'N 9012 EF',
-    'N 1234 AB',
-    'N 7777 QR',
-    'N 5678 CD',
-    'N 1111 ST',
-  ];
+  int _generation = 0;
+  List<BusWash> get buses => List.unmodifiable(_buses);
+  List<BusWash> get operational => _buses
+      .where((b) => b.date == kToday || b.status != WashStatus.unitKeluar)
+      .toList();
 
-  final List<String> masterBrands = [
-    'Hino',
-    'Mercedes-Benz',
-    'Scania',
-    'Isuzu',
-    'Volvo',
-  ];
+  bool get loading => _loading;
+  bool get loaded => _loaded;
+  String? get error => _error;
 
-  // CHECKLIST
+  Future<void> refresh() async {
+    if (_loading) return;
 
-  final List<String> checklistItems = [
-    'Bodi luar',
-    'Kaca',
-    'Interior',
-    'Lantai',
-  ];
+    final gen = _generation;
+    _loading = true;
+    _error = null;
+    notifyListeners();
 
-  // MASTER PEGAWAI
+    try {
+      final list = await JobService.instance.fetchJobs();
+      if (gen != _generation) return;
 
-  final List<Employee> employees = [
-    Employee(
-      name: 'Roby',
-      role: 'Petugas Cuci',
-    ),
-    Employee(
-      name: 'Andi Wijaya',
-      role: 'Petugas Cuci',
-    ),
-    Employee(
-      name: 'Budi Santoso',
-      role: 'Petugas Cuci',
-    ),
-    Employee(
-      name: 'Rudi Hartono',
-      role: 'Petugas Cuci',
-    ),
-    Employee(
-      name: 'Joko Susilo',
-      role: 'Petugas Cuci',
-    ),
-  ];
-
-  // PEGAWAI YANG SEDANG LOGIN / TESTING
-
-  String currentPetugas = 'Roby';
-
-  // DATA BUS
-
-  final List<BusWash> _buses = [];
-
-  List<BusWash> get buses {
-    return List.unmodifiable(_buses);
+      _buses = list;
+      _loaded = true;
+    } on ApiException catch (e) {
+      if (gen == _generation) _error = e.message;
+    } catch (_) {
+      if (gen == _generation) {
+        _error = 'Terjadi kesalahan saat memuat data. Coba lagi.';
+      }
+    } finally {
+      if (gen == _generation) {
+        _loading = false;
+        notifyListeners();
+      }
+    }
   }
-
-  // TAMBAH BUS
 
   void addBus(BusWash bus) {
-    _buses.add(bus);
-
+    _buses = [bus, ..._buses.where((b) => b.id != bus.id)];
     notifyListeners();
   }
 
-  // UPDATE BUS
-
-  void updateBus(
-    BusWash oldBus,
-    BusWash newBus,
-  ) {
-    final index = _buses.indexOf(oldBus);
-
-    if (index == -1) {
-      return;
-    }
-
-    _buses[index] = newBus;
-
+  void clear() {
+    _generation++;
+    _buses = [];
+    _loading = false;
+    _loaded = false;
+    _error = null;
     notifyListeners();
   }
 
-  // HAPUS BUS
-
-  void removeBus(BusWash bus) {
-    _buses.remove(bus);
-
-    notifyListeners();
-  }
-
-  // RESET DATA
-
-  void resetData() {
-    _buses.clear();
-
-    notifyListeners();
+  void _onAuthChanged() {
+    if (AuthService.instance.user == null) clear();
   }
 }
