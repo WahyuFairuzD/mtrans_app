@@ -3,6 +3,8 @@ import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
 import 'verify_otp_page.dart';
 
+const _red = Color(0xFFD9191F);
+
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
 
@@ -32,6 +34,7 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  // ===================== LOGIKA (tidak diubah) =====================
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -68,49 +71,94 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) setState(() => _loading = false);
     }
   }
+  // =================================================================
 
-  InputDecoration _decoration(String label, IconData icon, [Widget? suffix]) {
+  // ===================== TAMPILAN =====================
+  InputDecoration _decoration(String hint, IconData icon, [Widget? suffix]) {
+    OutlineInputBorder border(Color c) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: c),
+        );
+
     return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon),
+      hintText: hint,
+      hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+      prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
       suffixIcon: suffix,
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      border: border(AppColors.border),
+      enabledBorder: border(AppColors.border),
+      focusedBorder: border(_red),
+      errorBorder: border(Colors.red),
+      focusedErrorBorder: border(_red),
     );
   }
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          text,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(title: const Text('Daftar Akun')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Akun baru terdaftar sebagai Petugas Cuci. '
-                      'Kami akan mengirim kode verifikasi ke email kamu, '
-                      'jadi gunakan email yang aktif.',
-                      style: TextStyle(color: AppColors.textSecondary),
+                    // ---------- Info ----------
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _red.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline, size: 18, color: _red),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Akun baru terdaftar sebagai Petugas Cuci. '
+                              'Kami akan mengirim kode verifikasi ke email kamu, '
+                              'jadi gunakan email yang aktif.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
+
+                    // ---------- Nama lengkap ----------
+                    _label('Full Name'),
                     TextFormField(
                       controller: _name,
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
-                      decoration:
-                          _decoration('Nama lengkap', Icons.person_outline),
+                      decoration: _decoration(
+                        'Enter your full name',
+                        Icons.person_outline,
+                      ),
                       validator: (value) {
                         final text = value?.trim() ?? '';
                         if (text.isEmpty) return 'Nama lengkap wajib diisi.';
@@ -120,12 +168,18 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+
+                    // ---------- Email ----------
+                    _label('Email'),
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-                      decoration: _decoration('Email', Icons.mail_outline),
+                      decoration: _decoration(
+                        'Enter your email',
+                        Icons.mail_outline,
+                      ),
                       validator: (value) {
                         final text = value?.trim() ?? '';
                         if (text.isEmpty) return 'Email wajib diisi.';
@@ -135,13 +189,16 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+
+                    // ---------- No. HP ----------
+                    _label('Phone Number (optional)'),
                     TextFormField(
                       controller: _phone,
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.next,
                       decoration: _decoration(
-                        'No. HP (opsional)',
+                        'Enter your phone number',
                         Icons.phone_outlined,
                       ),
                       validator: (value) {
@@ -153,21 +210,26 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+
+                    // ---------- Password ----------
+                    _label('Password'),
                     TextFormField(
                       controller: _password,
                       obscureText: _obscure,
                       textInputAction: TextInputAction.next,
                       decoration: _decoration(
-                        'Password',
+                        'Enter your password',
                         Icons.lock_outline,
                         IconButton(
                           onPressed: () =>
                               setState(() => _obscure = !_obscure),
                           icon: Icon(
                             _obscure
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.textSecondary,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -181,14 +243,17 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+
+                    // ---------- Konfirmasi password ----------
+                    _label('Confirm Password'),
                     TextFormField(
                       controller: _confirm,
                       obscureText: _obscure,
                       textInputAction: TextInputAction.done,
                       onFieldSubmitted: (_) => _loading ? null : _submit(),
                       decoration: _decoration(
-                        'Konfirmasi password',
+                        'Re-enter your password',
                         Icons.lock_outline,
                       ),
                       validator: (value) {
@@ -198,6 +263,8 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
+
+                    // ---------- Pesan error ----------
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -224,11 +291,20 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _loading ? null : _submit,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                    const SizedBox(height: 28),
+
+                    // ---------- Tombol daftar ----------
+                    SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: _loading ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _red,
+                          disabledBackgroundColor: _red.withValues(alpha: 0.7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         child: _loading
                             ? const SizedBox(
                                 width: 20,
@@ -238,7 +314,20 @@ class _RegisterPageState extends State<RegisterPage> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('Daftar & Kirim Kode'),
+                            : const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Daftar & Kirim Kode',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(Icons.arrow_forward, size: 18),
+                                ],
+                              ),
                       ),
                     ),
                   ],

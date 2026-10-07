@@ -4,6 +4,9 @@ import '../../theme/app_theme.dart';
 import 'register_page.dart';
 import 'verify_otp_page.dart';
 
+const _red = Color(0xFFD9191F);
+const _blue = Color(0xFF1F3F9E);
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -20,6 +23,9 @@ class _LoginPageState extends State<LoginPage> {
   bool _loading = false;
   String? _error;
 
+  // UI saja (belum terhubung ke logika apa pun).
+  bool _remember = false;
+
   @override
   void dispose() {
     _email.dispose();
@@ -27,6 +33,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // logic
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -40,20 +47,14 @@ class _LoginPageState extends State<LoginPage> {
     final email = _email.text.trim();
 
     try {
-      await AuthService.instance.login(
-        email: email,
-        password: _password.text,
-      );
+      await AuthService.instance.login(email: email, password: _password.text);
     } on AuthException catch (e) {
       if (!mounted) return;
 
       if (e.isEmailNotVerified) {
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => VerifyOtpPage(
-              email: email,
-              sendCodeOnOpen: true,
-            ),
+            builder: (_) => VerifyOtpPage(email: email, sendCodeOnOpen: true),
           ),
         );
       } else {
@@ -67,56 +68,76 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  InputDecoration _decoration(String label, IconData icon, [Widget? suffix]) {
+  // ===================== TAMPILAN =====================
+  InputDecoration _decoration(String hint, IconData icon, [Widget? suffix]) {
+    OutlineInputBorder border(Color c) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: c),
+    );
+
     return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon),
+      hintText: hint,
+      hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+      prefixIcon: Icon(icon, color: AppColors.textSecondary, size: 20),
       suffixIcon: suffix,
       filled: true,
       fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      border: border(AppColors.border),
+      enabledBorder: border(AppColors.border),
+      focusedBorder: border(_red),
+      errorBorder: border(Colors.red),
+      focusedErrorBorder: border(_red),
     );
   }
+
+  Widget _label(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const _Logo(),
+                    const SizedBox(height: 0),
                     const Text(
-                      'MTRANS',
+                      'Internal Bus Washing Management System',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
+                        fontSize: 16,
+                        color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Masuk untuk melanjutkan',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
+
+                    // ---------- Email ----------
+                    _label('Email'),
                     TextFormField(
                       controller: _email,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
-                      decoration: _decoration('Email', Icons.mail_outline),
+                      decoration: _decoration(
+                        'Enter your email',
+                        Icons.person_outline,
+                      ),
                       validator: (value) {
                         final text = value?.trim() ?? '';
                         if (text.isEmpty) return 'Email wajib diisi.';
@@ -126,7 +147,10 @@ class _LoginPageState extends State<LoginPage> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+
+                    // ---------- Password ----------
+                    _label('Password'),
                     TextFormField(
                       controller: _password,
                       obscureText: _obscure,
@@ -134,15 +158,16 @@ class _LoginPageState extends State<LoginPage> {
                       autofillHints: const [AutofillHints.password],
                       onFieldSubmitted: (_) => _loading ? null : _submit(),
                       decoration: _decoration(
-                        'Password',
+                        'Enter your password',
                         Icons.lock_outline,
                         IconButton(
-                          onPressed: () =>
-                              setState(() => _obscure = !_obscure),
+                          onPressed: () => setState(() => _obscure = !_obscure),
                           icon: Icon(
                             _obscure
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.textSecondary,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -153,6 +178,8 @@ class _LoginPageState extends State<LoginPage> {
                         return null;
                       },
                     ),
+
+                    // ---------- Pesan error ----------
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -179,11 +206,74 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                     ],
+                    const SizedBox(height: 16),
+
+                    // ---------- Remember me + Forgot password (UI saja) ----------
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Checkbox(
+                            value: _remember,
+                            activeColor: _red,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            onChanged: (v) =>
+                                setState(() => _remember = v ?? false),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Remember Me',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () {
+                            // TODO: sambungkan ke reset password
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Hubungi administrator untuk reset password.',
+                                ),
+                              ),
+                            );
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: _red,
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Forgot password?',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _loading ? null : _submit,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+
+                    // ---------- Tombol login ----------
+                    SizedBox(
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: _loading ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _red,
+                          disabledBackgroundColor: _red.withValues(alpha: 0.7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                         child: _loading
                             ? const SizedBox(
                                 width: 20,
@@ -193,16 +283,34 @@ class _LoginPageState extends State<LoginPage> {
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text('Masuk'),
+                            : const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Login',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(Icons.arrow_forward, size: 18),
+                                ],
+                              ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
+
+                    // ---------- Daftar (navigasi lama dipertahankan) ----------
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
                           'Belum punya akun?',
-                          style: TextStyle(color: AppColors.textSecondary),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                         TextButton(
                           onPressed: _loading
@@ -215,15 +323,87 @@ class _LoginPageState extends State<LoginPage> {
                                     ),
                                   );
                                 },
-                          child: const Text('Daftar'),
+                          style: TextButton.styleFrom(foregroundColor: _red),
+                          child: const Text(
+                            'Daftar',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    const Divider(color: AppColors.border),
+                    const SizedBox(height: 12),
+
+                    // ---------- Footer ----------
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Developed By',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const _KrevLogo(),
                   ],
                 ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Logo perusahaan. Kalau file gambar belum ada, tampil teks pengganti.
+class _Logo extends StatelessWidget {
+  const _Logo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/images/kpb.png',
+      height: 175,
+      fit: BoxFit.contain,
+      errorBuilder: (_, _, _) => const Column(
+        children: [
+          Icon(Icons.public, size: 96, color: _blue),
+          SizedBox(height: 8),
+          Text(
+            'CV. KARYA PUTRA BUMI',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'serif',
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: _blue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KrevLogo extends StatelessWidget {
+  const _KrevLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/images/krev.png',
+      height: 35,
+      fit: BoxFit.contain,
+      errorBuilder: (_, _, _) => const Text(
+        'Krev',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 26,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1,
         ),
       ),
     );
