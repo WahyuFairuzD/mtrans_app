@@ -10,7 +10,6 @@ import '../../widgets/load_notice.dart';
 import '../../widgets/stat_card.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
-const _headerRed = Color(0xFFB1121A);
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -62,7 +61,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                       right: 0,
                       height: top + 190,
                       child: Container(
-                        color: _headerRed,
+                        color: AppColors.brand,
                         padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
                         child: Stack(
                           children: [

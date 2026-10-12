@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../models/bus_wash.dart';
 import '../../services/app_data.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
 import '../../widgets/stat_card.dart';
+import 'assign_page.dart';
 import 'input_bus_page.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
-const _headerRed = Color(0xFFB1121A);
 
 class PengawasDashboard extends StatefulWidget {
   const PengawasDashboard({super.key});
@@ -69,6 +70,23 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     _appData.addBus(result);
   }
 
+  Future<void> _assign(BusWash bus) async {
+    final result = await Navigator.push<BusWash>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AssignPage(bus: bus),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    _appData.addBus(result);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Penugasan berhasil disimpan.')),
+    );
+  }
+
   List<Widget> _section(
     String title,
     List<BusWash> items, [
@@ -105,11 +123,9 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     final top = MediaQuery.of(context).padding.top;
 
     final toAssign = _by([WashStatus.terdaftar]);
-
-    final running = _by([
-      WashStatus.menungguDikerjakan,
-      WashStatus.dalamPengerjaan,
-    ]);
+    final waiting = _by([WashStatus.menungguDikerjakan]);
+    final working = _by([WashStatus.dalamPengerjaan]);
+    final runningCount = waiting.length + working.length;
 
     final toInspect = _by([WashStatus.menungguPemeriksaan]);
 
@@ -128,7 +144,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
             right: 0,
             height: top + 190,
             child: Container(
-              color: _headerRed,
+              color: AppColors.brand,
               padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
               child: Stack(
                 children: [
@@ -200,7 +216,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                           color: Colors.blueGrey,
                         ),
                         StatCard(
-                          number: '${running.length}',
+                          number: '$runningCount',
                           title: 'Berjalan',
                           icon: Icons.autorenew,
                           color: Colors.orange,
@@ -242,10 +258,17 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                       'Perlu Ditugaskan',
                       toAssign,
                       'Tugaskan Petugas',
-                      (_) => _soon('Penugasan'),
+                      _assign,
                     ),
 
-                    ..._section('Sedang Berjalan', running),
+                    ..._section(
+                      'Menunggu Dikerjakan',
+                      waiting,
+                      'Ganti Petugas',
+                      _assign,
+                    ),
+
+                    ..._section('Sedang Dikerjakan', working),
 
                     ..._section(
                       'Menunggu Pemeriksaan',

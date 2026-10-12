@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../models/bus_wash.dart';
 import '../../services/app_data.dart';
 import '../../theme/app_theme.dart';
@@ -8,7 +7,6 @@ import '../../widgets/load_notice.dart';
 import '../../widgets/stat_card.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
-const _headerRed = Color(0xFFB1121A);
 
 class PegawaiDashboard extends StatefulWidget {
   const PegawaiDashboard({super.key});
@@ -80,7 +78,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
             right: 0,
             height: top + 190,
             child: Container(
-              color: _headerRed,
+              color: AppColors.brand,
               padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
               child: Stack(
                 children: [
