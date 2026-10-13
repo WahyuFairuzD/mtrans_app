@@ -14,6 +14,7 @@ import {
   ValidationError,
 } from '../lib/validate'
 import type { AppEnv } from '../types'
+import work from './work'
 
 const jobs = new Hono<AppEnv>()
 
@@ -313,5 +314,7 @@ jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
 
   return c.json({ message: 'Penugasan berhasil disimpan.', job: detail })
 })
+
+jobs.route('/', work)
 
 export default jobs

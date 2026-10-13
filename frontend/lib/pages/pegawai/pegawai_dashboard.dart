@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
+import '../../services/api_exception.dart';
 import '../../services/app_data.dart';
+import '../../services/work_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/load_notice.dart';
 import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
+import 'work_page.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
 
@@ -19,6 +22,8 @@ class PegawaiDashboard extends StatefulWidget {
 
 class _PegawaiDashboardState extends State<PegawaiDashboard> {
   final AppData _appData = AppData.instance;
+
+  bool _busy = false;
 
   @override
   void initState() {
@@ -50,9 +55,74 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
         .toList();
   }
 
-  void _soon(String feature) {
+  void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature belum tersedia.')),
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _start(BusWash bus) async {
+    if (_busy) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Mulai cuci ${bus.plateNumber}?'),
+        content: const Text('Waktu mulai akan dicatat sekarang.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Mulai Cuci'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+
+    BusWash? started;
+
+    try {
+      started = await WorkService.instance.startJob(bus.id);
+    } on ApiException catch (e) {
+      if (mounted) {
+        _showError(e.message);
+        if (e.statusCode == 409) _appData.refresh();
+      }
+    } catch (_) {
+      if (mounted) _showError('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+
+    if (started == null || !mounted) return;
+
+    _appData.addBus(started);
+    await _openWork(started);
+  }
+
+  Future<void> _openWork(BusWash bus) async {
+    final result = await Navigator.push<BusWash>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkPage(bus: bus),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    _appData.addBus(result);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Pekerjaan selesai dan menunggu pemeriksaan Pengawas.'),
+      ),
     );
   }
 
@@ -216,7 +286,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                             bus: bus,
                             actionLabel: 'Mulai Cuci',
                             actionIcon: Icons.play_arrow,
-                            onAction: () => _soon('Mulai Cuci'),
+                            onAction: _busy ? null : () => _start(bus),
                           ),
                         ),
                       ),
@@ -226,9 +296,9 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                           padding: const EdgeInsets.only(bottom: 10),
                           child: _TaskCard(
                             bus: bus,
-                            actionLabel: 'Selesai Cuci',
-                            actionIcon: Icons.check,
-                            onAction: () => _soon('Selesai Cuci'),
+                            actionLabel: 'Lanjutkan Pekerjaan',
+                            actionIcon: Icons.assignment_outlined,
+                            onAction: _busy ? null : () => _openWork(bus),
                           ),
                         ),
                       ),
@@ -255,7 +325,7 @@ class _TaskCard extends StatelessWidget {
   final BusWash bus;
   final String actionLabel;
   final IconData actionIcon;
-  final VoidCallback onAction;
+  final VoidCallback? onAction;
 
   const _TaskCard({
     required this.bus,
