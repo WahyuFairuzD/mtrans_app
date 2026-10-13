@@ -10,7 +10,6 @@ import {
 } from '../lib/validate'
 import type { AppEnv, AuthUser } from '../types'
 
-// requireAuth dipasang oleh jobs.ts, karena route ini di-mount di sana.
 const work = new Hono<AppEnv>()
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024
@@ -40,7 +39,6 @@ const serverError = (c: Context<AppEnv>, err: unknown, message: string) => {
   return c.json(apiError('INTERNAL_ERROR', message), 500)
 }
 
-// Pekerjaan yang boleh diakses user: pengawas/owner semua, pegawai hanya yang ditugaskan.
 async function findAccessibleJob(
   db: Db,
   jobId: string,
@@ -110,8 +108,6 @@ async function runTransition(
   return c.json({ message: successMessage, job: detail })
 }
 
-// ---------- Mulai & Selesai ----------
-
 work.post('/:id/start', requireRole('pegawai'), async (c) => {
   const id = c.req.param('id')
   if (!uuidPattern.test(id)) return jobNotFound(c)
@@ -156,8 +152,6 @@ work.post('/:id/finish', requireRole('pegawai'), async (c) => {
       'Pekerjaan hanya bisa diselesaikan saat status Dalam Pengerjaan.',
     )
   }
-
-  // Aturan "minimal 1 foto" dan "checklist wajib lengkap" dijaga trigger di database.
   return runTransition(
     c,
     db,
@@ -168,8 +162,6 @@ work.post('/:id/finish', requireRole('pegawai'), async (c) => {
     'Pekerjaan selesai dan menunggu pemeriksaan.',
   )
 })
-
-// ---------- Checklist ----------
 
 const CHECKLIST_COLUMNS = 'id, label, is_required, sort_order, is_done, checked_at'
 
@@ -237,8 +229,6 @@ work.patch('/:id/checklist/:itemId', requireRole('pegawai'), async (c) => {
 
   return c.json({ item: data })
 })
-
-// ---------- Foto ----------
 
 work.post('/:id/photos', requireRole('pegawai'), async (c) => {
   const id = c.req.param('id')
@@ -386,7 +376,6 @@ work.delete('/:id/photos/:photoId', requireRole('pegawai'), async (c) => {
   if (error) return serverError(c, error, 'Gagal mengambil foto.')
   if (!photo) return photoNotFound(c)
 
-  // Hapus baris database dulu; kalau gagal, file R2 tetap aman dan tidak ada baris yatim.
   const { error: deleteError } = await db
     .from('job_photos')
     .delete()

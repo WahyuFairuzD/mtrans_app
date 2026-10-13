@@ -22,8 +22,6 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscure = true;
   bool _loading = false;
   String? _error;
-
-  // UI saja (belum terhubung ke logika apa pun).
   bool _remember = false;
 
   @override
@@ -33,7 +31,6 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  // logic
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -68,7 +65,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // ===================== TAMPILAN =====================
   InputDecoration _decoration(String hint, IconData icon, [Widget? suffix]) {
     OutlineInputBorder border(Color c) => OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -127,7 +123,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // ---------- Email ----------
                     _label('Email'),
                     TextFormField(
                       controller: _email,
@@ -149,7 +144,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // ---------- Password ----------
                     _label('Password'),
                     TextFormField(
                       controller: _password,
@@ -179,7 +173,6 @@ class _LoginPageState extends State<LoginPage> {
                       },
                     ),
 
-                    // ---------- Pesan error ----------
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -208,7 +201,6 @@ class _LoginPageState extends State<LoginPage> {
                     ],
                     const SizedBox(height: 16),
 
-                    // ---------- Remember me + Forgot password (UI saja) ----------
                     Row(
                       children: [
                         SizedBox(
@@ -262,7 +254,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 24),
 
-                    // ---------- Tombol login ----------
                     SizedBox(
                       height: 52,
                       child: FilledButton(
@@ -301,7 +292,6 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 8),
 
-                    // ---------- Daftar (navigasi lama dipertahankan) ----------
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -334,8 +324,6 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 8),
                     const Divider(color: AppColors.border),
                     const SizedBox(height: 12),
-
-                    // ---------- Footer ----------
                     const SizedBox(height: 8),
                     const Text(
                       'Developed By',
@@ -358,7 +346,6 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-/// Logo perusahaan. Kalau file gambar belum ada, tampil teks pengganti.
 class _Logo extends StatelessWidget {
   const _Logo();
 

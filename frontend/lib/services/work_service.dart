@@ -80,10 +80,6 @@ class WorkService {
     required String path,
   }) async {
     final fileName = path.split(RegExp(r'[\\/]')).last;
-
-    // FormData tidak bisa dikirim ulang setelah dipakai, jadi dibuat baru di
-    // tiap percobaan. Percobaan kedua hanya terjadi kalau token baru saja di-refresh
-    // oleh ApiClient (retry otomatis ApiClient gagal untuk FormData).
     for (var attempt = 0;; attempt++) {
       try {
         final form = FormData.fromMap({
