@@ -34,7 +34,6 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
-  // ===================== LOGIKA (tidak diubah) =====================
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -71,9 +70,6 @@ class _RegisterPageState extends State<RegisterPage> {
       if (mounted) setState(() => _loading = false);
     }
   }
-  // =================================================================
-
-  // ===================== TAMPILAN =====================
   InputDecoration _decoration(String hint, IconData icon, [Widget? suffix]) {
     OutlineInputBorder border(Color c) => OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -121,7 +117,6 @@ class _RegisterPageState extends State<RegisterPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ---------- Info ----------
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -148,8 +143,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ),
                     const SizedBox(height: 24),
-
-                    // ---------- Nama lengkap ----------
                     _label('Full Name'),
                     TextFormField(
                       controller: _name,
@@ -169,8 +162,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 20),
-
-                    // ---------- Email ----------
                     _label('Email'),
                     TextFormField(
                       controller: _email,
@@ -190,8 +181,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 20),
-
-                    // ---------- No. HP ----------
                     _label('Phone Number (optional)'),
                     TextFormField(
                       controller: _phone,
@@ -211,8 +200,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 20),
-
-                    // ---------- Password ----------
                     _label('Password'),
                     TextFormField(
                       controller: _password,
@@ -244,8 +231,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       },
                     ),
                     const SizedBox(height: 20),
-
-                    // ---------- Konfirmasi password ----------
                     _label('Confirm Password'),
                     TextFormField(
                       controller: _confirm,
@@ -263,8 +248,6 @@ class _RegisterPageState extends State<RegisterPage> {
                         return null;
                       },
                     ),
-
-                    // ---------- Pesan error ----------
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -292,8 +275,6 @@ class _RegisterPageState extends State<RegisterPage> {
                       ),
                     ],
                     const SizedBox(height: 28),
-
-                    // ---------- Tombol daftar ----------
                     SizedBox(
                       height: 52,
                       child: FilledButton(

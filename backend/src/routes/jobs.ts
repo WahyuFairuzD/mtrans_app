@@ -241,8 +241,6 @@ jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
   const raw = await readJson(c)
   const pegawaiIds = uuidList(raw.pegawai_ids, 'Petugas', 1, MAX_ASSIGNEES)
 
-  // undefined  -> pertahankan instruksi lama (null ke assign_job)
-  // null / ''  -> hapus instruksi (kirim string kosong, karena assign_job pakai coalesce)
   const instructions =
     raw.instructions === undefined
       ? null

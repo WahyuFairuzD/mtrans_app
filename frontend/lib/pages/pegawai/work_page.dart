@@ -141,8 +141,6 @@ class _WorkPageState extends State<WorkPage> {
     return result == true;
   }
 
-  // ---------- Checklist ----------
-
   void _replaceItem(ChecklistItem item) {
     _items = _items.map((i) => i.id == item.id ? item : i).toList();
   }
@@ -175,8 +173,6 @@ class _WorkPageState extends State<WorkPage> {
       if (mounted) setState(() => _savingItems.remove(item.id));
     }
   }
-
-  // ---------- Foto ----------
 
   Future<Uint8List> _photoFuture(String photoId) {
     return _photoFutures.putIfAbsent(
@@ -311,8 +307,6 @@ class _WorkPageState extends State<WorkPage> {
     );
   }
 
-  // ---------- Selesai ----------
-
   Future<void> _finish() async {
     if (!_canFinish) return;
 
@@ -338,8 +332,6 @@ class _WorkPageState extends State<WorkPage> {
       if (mounted) setState(() => _finishing = false);
     }
   }
-
-  // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {

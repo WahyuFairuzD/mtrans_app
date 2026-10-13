@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
 import '../models/bus_wash.dart';
 import '../theme/app_theme.dart';
+import 'job_media.dart';
 
 bool _hasPhotos(BusWash bus) =>
     bus.status.index >= WashStatus.menungguPemeriksaan.index;
-
-
-// KARTU BUS
+bool _hasProof(BusWash bus) =>
+    bus.status.index >= WashStatus.dalamPengerjaan.index;
 
 class BusCard extends StatelessWidget {
   final BusWash bus;
   final bool showDate;
-
-  /// Opsional: tombol aksi di bawah kartu (dipakai Pengawas).
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -167,9 +165,6 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-
-// BAGIAN YANG DIPAKAI ULANG (detail + pemeriksaan)
-
 class ChecklistList extends StatelessWidget {
   final List<String> items;
 
@@ -257,9 +252,6 @@ class WashPhoto extends StatelessWidget {
   }
 }
 
-
-// DETAIL (bottom sheet)
-
 void showBusDetail(BuildContext context, BusWash bus) {
   showModalBottomSheet(
     context: context,
@@ -341,14 +333,7 @@ class _DetailSheet extends StatelessWidget {
               const _SectionTitle('Petugas'),
               ...bus.employees.map((e) => _EmployeeTile(employee: e)),
             ],
-            if (bus.checklist.isNotEmpty) ...[
-              const _SectionTitle('Checklist'),
-              ChecklistList(items: bus.checklist),
-            ],
-            if (_hasPhotos(bus)) ...[
-              const _SectionTitle('Foto sesudah cuci'),
-              WashPhoto(bus: bus),
-            ],
+            if (_hasProof(bus)) JobProofSection(jobId: bus.id),
             if (bus.inspectionNote != null) ...[
               const _SectionTitle('Hasil pemeriksaan'),
               Text(bus.inspectionNote!),

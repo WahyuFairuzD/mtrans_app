@@ -49,7 +49,6 @@ class StatCard extends StatelessWidget {
   }
 }
 
-/// Grid 2 kolom untuk deretan StatCard.
 class StatGrid extends StatelessWidget {
   final List<StatCard> items;
 
