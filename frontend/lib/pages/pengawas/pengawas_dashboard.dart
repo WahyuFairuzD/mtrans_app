@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
-import '../../services/app_data.dart';
 import '../../services/review_service.dart';
+import '../stock_page.dart';
 import '../../theme/app_theme.dart';
+import '../../services/app_data.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
@@ -299,6 +300,14 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                         ],
                       ),
 
+                      const SizedBox(height: 14),
+                      _StockEntry(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const StockPage()),
+                        ),
+                      ),
+
                       LoadNotice(
                         loading: _appData.loading,
                         loaded: _appData.loaded,
@@ -366,4 +375,33 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
       ),
     );
   }
+}
+
+class _StockEntry extends StatelessWidget {
+  const _StockEntry({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+        child: const Row(children: [
+          CircleAvatar(backgroundColor: Color(0xFFEAF2FF), child: Icon(Icons.inventory_2_outlined, color: Colors.blue)),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Kelola Stok', style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 3),
+            Text('Lihat persediaan dan catat perubahan', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ])),
+          Icon(Icons.chevron_right, color: AppColors.textSecondary),
+        ]),
+      ),
+    ),
+  );
 }
