@@ -7,6 +7,7 @@ import '../../utils/wib.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
+import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
@@ -68,15 +69,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                IconButton(
-                                  padding: EdgeInsets.zero,
-                                  alignment: Alignment.centerLeft,
-                                  onPressed: () {},
-                                  icon: const Icon(
-                                    Icons.person_outline,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                const ProfileButton(),
                                 const Spacer(),
                                 Image.asset(
                                   _logoAsset,
