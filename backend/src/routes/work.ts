@@ -5,6 +5,7 @@ import { adminClient } from '../lib/supabase'
 import {
   boolValue,
   readJson,
+  text,
   uuidPattern,
   ValidationError,
 } from '../lib/validate'
@@ -19,6 +20,8 @@ const PHOTO_EXT: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 }
+
+const INSPECTION_RESULTS = ['bersih', 'cukup', 'kurang']
 
 type Db = ReturnType<typeof adminClient>
 
@@ -66,6 +69,24 @@ async function findAccessibleJob(
   return data as { id: string; status: string }
 }
 
+async function loadJobDetail(c: Context<AppEnv>, db: Db, jobId: string, message: string) {
+  const { data: detail, error } = await db
+    .from('v_job_detail')
+    .select('*')
+    .eq('id', jobId)
+    .maybeSingle()
+
+  if (error || !detail) {
+    return serverError(
+      c,
+      error,
+      'Perubahan tersimpan, tetapi gagal memuat data terbaru.',
+    )
+  }
+
+  return c.json({ message, job: detail })
+}
+
 async function runTransition(
   c: Context<AppEnv>,
   db: Db,
@@ -91,21 +112,7 @@ async function runTransition(
     return conflict(c, 'Status pekerjaan sudah berubah. Muat ulang data.')
   }
 
-  const { data: detail, error: detailError } = await db
-    .from('v_job_detail')
-    .select('*')
-    .eq('id', jobId)
-    .maybeSingle()
-
-  if (detailError || !detail) {
-    return serverError(
-      c,
-      detailError,
-      'Status tersimpan, tetapi gagal memuat data terbaru.',
-    )
-  }
-
-  return c.json({ message: successMessage, job: detail })
+  return loadJobDetail(c, db, jobId, successMessage)
 }
 
 work.post('/:id/start', requireRole('pegawai'), async (c) => {
@@ -160,6 +167,74 @@ work.post('/:id/finish', requireRole('pegawai'), async (c) => {
     'menunggu_pemeriksaan',
     user.id,
     'Pekerjaan selesai dan menunggu pemeriksaan.',
+  )
+})
+
+work.post('/:id/inspection', requireRole('pengawas'), async (c) => {
+  const id = c.req.param('id')
+  if (!uuidPattern.test(id)) return jobNotFound(c)
+
+  const raw = await readJson(c)
+
+  const result = raw.result
+  if (typeof result !== 'string' || !INSPECTION_RESULTS.includes(result)) {
+    throw new ValidationError('Hasil pemeriksaan tidak valid.')
+  }
+  const notes = text(raw.notes, 'Catatan pemeriksaan', { max: 500 })
+
+  const user = c.get('user')
+  const db = adminClient(c.env)
+
+  const job = await findAccessibleJob(db, id, user)
+  if (!job) return jobNotFound(c)
+
+  if (job.status !== 'menunggu_pemeriksaan') {
+    return conflict(
+      c,
+      'Pemeriksaan hanya bisa dilakukan saat status Menunggu Pemeriksaan.',
+    )
+  }
+
+  const { error } = await db.from('inspections').insert({
+    job_id: id,
+    inspector_id: user.id,
+    result,
+    notes: notes ?? null,
+  })
+
+  if (error) {
+    if (error.code === '23505') {
+      return conflict(c, 'Pekerjaan ini sudah diperiksa.')
+    }
+    if (error.code === 'P0001') return conflict(c, error.message)
+    return serverError(c, error, 'Gagal menyimpan hasil pemeriksaan.')
+  }
+
+  return loadJobDetail(c, db, id, 'Hasil pemeriksaan tersimpan.')
+})
+
+work.post('/:id/exit', requireRole('pengawas'), async (c) => {
+  const id = c.req.param('id')
+  if (!uuidPattern.test(id)) return jobNotFound(c)
+
+  const user = c.get('user')
+  const db = adminClient(c.env)
+
+  const job = await findAccessibleJob(db, id, user)
+  if (!job) return jobNotFound(c)
+
+  if (job.status !== 'selesai') {
+    return conflict(c, 'Unit hanya bisa dicatat keluar setelah pekerjaan Selesai.')
+  }
+
+  return runTransition(
+    c,
+    db,
+    id,
+    'selesai',
+    'unit_keluar',
+    user.id,
+    'Unit keluar dicatat.',
   )
 })
 
@@ -361,7 +436,6 @@ work.delete('/:id/photos/:photoId', requireRole('pegawai'), async (c) => {
 
   const job = await findAccessibleJob(db, id, user)
   if (!job) return jobNotFound(c)
-
   if (job.status !== 'dalam_pengerjaan') {
     return conflict(c, 'Foto hanya bisa dihapus saat status Dalam Pengerjaan.')
   }

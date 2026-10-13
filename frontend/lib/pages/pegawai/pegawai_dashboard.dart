@@ -6,6 +6,7 @@ import '../../services/app_data.dart';
 import '../../services/work_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bus_card.dart';
+import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
 import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
@@ -309,6 +310,10 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                           child: BusCard(bus: bus),
                         ),
                       ),
+
+                      const SizedBox(height: 14),
+
+                      const HistoryButton(),
                     ],
                   ),
                 ),

@@ -45,7 +45,7 @@ lookups.get(
 lookups.get(
   '/pegawai',
   requireAuth,
-  requireRole('pengawas'),
+  requireRole('owner', 'pengawas'),
   async (c) => {
     const { data, error } = await adminClient(c.env)
       .from('profiles')
