@@ -28,6 +28,8 @@ const JOB_STATUSES = [
   'unit_keluar',
 ]
 
+const MAX_ASSIGNEES = 20
+
 type Db = ReturnType<typeof adminClient>
 
 async function assignedJobIds(db: Db, pegawaiId: string): Promise<string[]> {
@@ -37,6 +39,20 @@ async function assignedJobIds(db: Db, pegawaiId: string): Promise<string[]> {
     .eq('pegawai_id', pegawaiId)
   if (error) throw error
   return (data ?? []).map((r: { job_id: string }) => r.job_id)
+}
+
+function uuidList(v: unknown, label: string, min: number, max: number): string[] {
+  if (!Array.isArray(v)) {
+    throw new ValidationError(`${label} wajib dipilih.`)
+  }
+  const ids = [...new Set(v.map((x) => requiredUuid(x, label)))]
+  if (ids.length < min) {
+    throw new ValidationError(`Pilih minimal ${min} petugas.`)
+  }
+  if (ids.length > max) {
+    throw new ValidationError(`Maksimal ${max} petugas per pekerjaan.`)
+  }
+  return ids
 }
 
 jobs.post('/', requireRole('pengawas'), async (c) => {
@@ -196,18 +212,106 @@ jobs.get('/:id', async (c) => {
     if (!link) return notFound()
   }
 
-  const { data, error } = await db
+  const [jobRes, linkRes] = await Promise.all([
+    db.from('v_job_detail').select('*').eq('id', id).maybeSingle(),
+    db.from('job_assignees').select('pegawai_id').eq('job_id', id),
+  ])
+
+  if (jobRes.error || linkRes.error) {
+    console.error(jobRes.error ?? linkRes.error)
+    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil detail pekerjaan.'), 500)
+  }
+  if (!jobRes.data) return notFound()
+
+  return c.json({
+    job: jobRes.data,
+    pegawai_ids: (linkRes.data ?? []).map(
+      (r: { pegawai_id: string }) => r.pegawai_id,
+    ),
+  })
+})
+
+jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
+  const id = c.req.param('id')
+  const notFound = () =>
+    c.json(apiError('NOT_FOUND', 'Pekerjaan tidak ditemukan.'), 404)
+  if (!uuidPattern.test(id)) return notFound()
+
+  const raw = await readJson(c)
+  const pegawaiIds = uuidList(raw.pegawai_ids, 'Petugas', 1, MAX_ASSIGNEES)
+
+  // undefined  -> pertahankan instruksi lama (null ke assign_job)
+  // null / ''  -> hapus instruksi (kirim string kosong, karena assign_job pakai coalesce)
+  const instructions =
+    raw.instructions === undefined
+      ? null
+      : (text(raw.instructions, 'Instruksi', { max: 255 }) ?? '')
+
+  const user = c.get('user')
+  const db = adminClient(c.env)
+
+  const [jobRes, pegawaiRes] = await Promise.all([
+    db.from('wash_jobs').select('id, status').eq('id', id).maybeSingle(),
+    db
+      .from('profiles')
+      .select('id')
+      .eq('role', 'pegawai')
+      .eq('is_active', true)
+      .in('id', pegawaiIds),
+  ])
+
+  const failed = jobRes.error ?? pegawaiRes.error
+  if (failed) {
+    console.error(failed)
+    return c.json(apiError('INTERNAL_ERROR', 'Gagal memvalidasi data.'), 500)
+  }
+  if (!jobRes.data) return notFound()
+
+  if ((pegawaiRes.data ?? []).length !== pegawaiIds.length) {
+    throw new ValidationError('Terdapat petugas yang tidak valid atau tidak aktif.')
+  }
+
+  if (!['terdaftar', 'menunggu_dikerjakan'].includes(jobRes.data.status)) {
+    return c.json(
+      apiError(
+        'CONFLICT',
+        'Penugasan tidak dapat diubah setelah pengerjaan dimulai.',
+      ),
+      409,
+    )
+  }
+
+  const { error } = await db.rpc('assign_job', {
+    p_job_id: id,
+    p_pegawai_ids: pegawaiIds,
+    p_team_id: null,
+    p_instructions: instructions,
+    p_assigned_by: user.id,
+  })
+
+  if (error) {
+    if (error.code === 'P0001') {
+      return c.json(apiError('CONFLICT', error.message), 409)
+    }
+    console.error(error)
+    return c.json(apiError('INTERNAL_ERROR', 'Gagal menyimpan penugasan.'), 500)
+  }
+
+  const { data: detail, error: detailError } = await db
     .from('v_job_detail')
     .select('*')
     .eq('id', id)
     .maybeSingle()
 
-  if (error) {
-    console.error(error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil detail pekerjaan.'), 500)
+  if (detailError || !detail) {
+    console.error(detailError)
+    return c.json(
+      apiError('INTERNAL_ERROR', 'Penugasan tersimpan, tetapi gagal memuat data terbaru.'),
+      500,
+    )
   }
-  if (!data) return notFound()
-  return c.json({ job: data })
+
+  return c.json({ message: 'Penugasan berhasil disimpan.', job: detail })
 })
 
 export default jobs

@@ -42,4 +42,23 @@ lookups.get(
   },
 )
 
+lookups.get(
+  '/pegawai',
+  requireAuth,
+  requireRole('pengawas'),
+  async (c) => {
+    const { data, error } = await adminClient(c.env)
+      .from('profiles')
+      .select('id, full_name')
+      .eq('role', 'pegawai')
+      .eq('is_active', true)
+      .order('full_name')
+    if (error) {
+      console.error(error)
+      return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil daftar petugas.'), 500)
+    }
+    return c.json({ data })
+  },
+)
+
 export default lookups

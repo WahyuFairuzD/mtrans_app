@@ -7,10 +7,10 @@ import '../../utils/wib.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
+import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
-const _headerRed = Color(0xFFB1121A);
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -62,22 +62,14 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                       right: 0,
                       height: top + 190,
                       child: Container(
-                        color: _headerRed,
+                        color: AppColors.brand,
                         padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
                         child: Stack(
                           children: [
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                IconButton(
-                                  padding: EdgeInsets.zero,
-                                  alignment: Alignment.centerLeft,
-                                  onPressed: () {},
-                                  icon: const Icon(
-                                    Icons.person_outline,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                const ProfileButton(),
                                 const Spacer(),
                                 Image.asset(
                                   _logoAsset,
