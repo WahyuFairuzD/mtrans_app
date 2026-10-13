@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
+import '../../services/api_exception.dart';
 import '../../services/app_data.dart';
+import '../../services/review_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
@@ -10,6 +12,7 @@ import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
 import 'assign_page.dart';
 import 'input_bus_page.dart';
+import 'inspection_page.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
 
@@ -22,6 +25,8 @@ class PengawasDashboard extends StatefulWidget {
 
 class _PengawasDashboardState extends State<PengawasDashboard> {
   final AppData _appData = AppData.instance;
+
+  bool _busy = false;
 
   @override
   void initState() {
@@ -53,9 +58,9 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
         .toList();
   }
 
-  void _soon(String feature) {
+  void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature belum tersedia.')),
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -84,9 +89,71 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
 
     _appData.addBus(result);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Penugasan berhasil disimpan.')),
+    _showMessage('Penugasan berhasil disimpan.');
+  }
+
+  Future<void> _inspect(BusWash bus) async {
+    final result = await Navigator.push<BusWash>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InspectionPage(bus: bus),
+      ),
     );
+
+    if (result == null || !mounted) return;
+
+    _appData.addBus(result);
+
+    _showMessage('Hasil pemeriksaan tersimpan. Bus siap dicatat keluar.');
+  }
+
+  Future<void> _recordExit(BusWash bus) async {
+    if (_busy) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Catat ${bus.plateNumber} keluar?'),
+        content: const Text(
+          'Waktu keluar dicatat sekarang dan pekerjaan masuk ke rekap.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Catat Keluar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+
+    BusWash? updated;
+
+    try {
+      updated = await ReviewService.instance.recordExit(bus.id);
+    } on ApiException catch (e) {
+      if (mounted) {
+        _showMessage(e.message);
+        if (e.statusCode == 409) _appData.refresh();
+      }
+    } catch (_) {
+      if (mounted) _showMessage('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+
+    if (updated == null || !mounted) return;
+
+    _appData.addBus(updated);
+
+    _showMessage('Unit keluar dicatat.');
   }
 
   List<Widget> _section(
@@ -270,14 +337,14 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                         'Menunggu Pemeriksaan',
                         toInspect,
                         'Periksa Hasil',
-                        (_) => _soon('Pemeriksaan'),
+                        _inspect,
                       ),
 
                       ..._section(
                         'Siap Keluar',
                         toExit,
                         'Catat Bus Keluar',
-                        (_) => _soon('Pencatatan bus keluar'),
+                        _recordExit,
                       ),
 
                       const SizedBox(height: 24),

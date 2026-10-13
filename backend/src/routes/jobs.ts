@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { requireAuth, requireRole } from '../middleware/auth'
 import { apiError } from '../lib/response'
 import { adminClient } from '../lib/supabase'
@@ -31,15 +31,37 @@ const JOB_STATUSES = [
 
 const MAX_ASSIGNEES = 20
 
-type Db = ReturnType<typeof adminClient>
+type Filters = {
+  statuses: string[]
+  locationId?: string
+  serviceTypeId?: string
+  pegawaiId?: string
+  unitId?: string
+  from?: string
+  to?: string
+  q?: string
+}
 
-async function assignedJobIds(db: Db, pegawaiId: string): Promise<string[]> {
-  const { data, error } = await db
-    .from('job_assignees')
-    .select('job_id')
-    .eq('pegawai_id', pegawaiId)
-  if (error) throw error
-  return (data ?? []).map((r: { job_id: string }) => r.job_id)
+// Filter yang sama dipakai daftar riwayat dan rekap.
+function parseFilters(c: Context<AppEnv>): Filters {
+  const statusParam = c.req.query('status')
+  const statuses = statusParam
+    ? statusParam.split(',').map((s) => s.trim()).filter(Boolean)
+    : []
+  if (statuses.some((s) => !JOB_STATUSES.includes(s))) {
+    throw new ValidationError('Status tidak valid.')
+  }
+
+  return {
+    statuses,
+    locationId: optionalUuid(c.req.query('location_id'), 'Lokasi'),
+    serviceTypeId: optionalUuid(c.req.query('service_type_id'), 'Jenis layanan'),
+    pegawaiId: optionalUuid(c.req.query('pegawai_id'), 'Petugas'),
+    unitId: optionalUuid(c.req.query('unit_id'), 'Unit'),
+    from: isoDateTime(c.req.query('from'), 'tanggal awal'),
+    to: isoDateTime(c.req.query('to'), 'tanggal akhir'),
+    q: c.req.query('q')?.trim() || undefined,
+  }
 }
 
 function uuidList(v: unknown, label: string, min: number, max: number): string[] {
@@ -141,19 +163,7 @@ jobs.post('/', requireRole('pengawas'), async (c) => {
 })
 
 jobs.get('/', async (c) => {
-  const statusParam = c.req.query('status')
-  const statuses = statusParam
-    ? statusParam.split(',').map((s) => s.trim()).filter(Boolean)
-    : []
-  if (statuses.some((s) => !JOB_STATUSES.includes(s))) {
-    throw new ValidationError('Status tidak valid.')
-  }
-  const locationId = optionalUuid(c.req.query('location_id'), 'Lokasi')
-  const serviceTypeId = optionalUuid(c.req.query('service_type_id'), 'Jenis layanan')
-  const pegawaiId = optionalUuid(c.req.query('pegawai_id'), 'Petugas')
-  const from = isoDateTime(c.req.query('from'), 'tanggal awal')
-  const to = isoDateTime(c.req.query('to'), 'tanggal akhir')
-  const q = c.req.query('q')?.trim()
+  const f = parseFilters(c)
   const limit = intQuery(c.req.query('limit'), 'Limit', 50, 1, 100)
   const offset = intQuery(c.req.query('offset'), 'Offset', 0, 0, 1_000_000)
 
@@ -164,27 +174,20 @@ jobs.get('/', async (c) => {
     .from('v_job_detail')
     .select('*')
     .order('entered_at', { ascending: false })
+    .order('id', { ascending: false })
     .range(offset, offset + limit - 1)
 
-  const scopePegawaiId = user.role === 'pegawai' ? user.id : pegawaiId
-  if (scopePegawaiId) {
-    let ids: string[]
-    try {
-      ids = await assignedJobIds(db, scopePegawaiId)
-    } catch (err) {
-      console.error(err)
-      return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil data tugas.'), 500)
-    }
-    if (ids.length === 0) return c.json({ data: [], limit, offset })
-    req = req.in('id', ids)
-  }
+  // Petugas selalu dibatasi ke tugas miliknya sendiri, apa pun parameter yang dikirim.
+  const scopePegawaiId = user.role === 'pegawai' ? user.id : f.pegawaiId
+  if (scopePegawaiId) req = req.contains('pegawai_ids', [scopePegawaiId])
 
-  if (statuses.length) req = req.in('status', statuses)
-  if (locationId) req = req.eq('location_id', locationId)
-  if (serviceTypeId) req = req.eq('service_type_id', serviceTypeId)
-  if (from) req = req.gte('entered_at', from)
-  if (to) req = req.lte('entered_at', to)
-  if (q) req = req.ilike('plate_number', `%${safeLike(q)}%`)
+  if (f.statuses.length) req = req.in('status', f.statuses)
+  if (f.locationId) req = req.eq('location_id', f.locationId)
+  if (f.serviceTypeId) req = req.eq('service_type_id', f.serviceTypeId)
+  if (f.unitId) req = req.eq('unit_id', f.unitId)
+  if (f.from) req = req.gte('entered_at', f.from)
+  if (f.to) req = req.lte('entered_at', f.to)
+  if (f.q) req = req.ilike('plate_number', `%${safeLike(f.q)}%`)
 
   const { data, error } = await req
   if (error) {
@@ -192,6 +195,29 @@ jobs.get('/', async (c) => {
     return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil data pekerjaan.'), 500)
   }
   return c.json({ data, limit, offset })
+})
+
+// Harus didaftarkan sebelum '/:id' supaya 'recap' tidak dianggap sebagai id.
+jobs.get('/recap', requireRole('owner', 'pengawas'), async (c) => {
+  const f = parseFilters(c)
+  const plate = f.q ? safeLike(f.q) : ''
+
+  const { data, error } = await adminClient(c.env).rpc('job_recap', {
+    p_from: f.from ?? null,
+    p_to: f.to ?? null,
+    p_location_id: f.locationId ?? null,
+    p_service_type_id: f.serviceTypeId ?? null,
+    p_pegawai_id: f.pegawaiId ?? null,
+    p_unit_id: f.unitId ?? null,
+    p_plate: plate || null,
+    p_statuses: f.statuses.length ? f.statuses : null,
+  })
+
+  if (error) {
+    console.error(error)
+    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil rekap.'), 500)
+  }
+  return c.json({ recap: data })
 })
 
 jobs.get('/:id', async (c) => {
@@ -241,6 +267,8 @@ jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
   const raw = await readJson(c)
   const pegawaiIds = uuidList(raw.pegawai_ids, 'Petugas', 1, MAX_ASSIGNEES)
 
+  // undefined  -> pertahankan instruksi lama (null ke assign_job)
+  // null / ''  -> hapus instruksi (kirim string kosong, karena assign_job pakai coalesce)
   const instructions =
     raw.instructions === undefined
       ? null
@@ -313,6 +341,7 @@ jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
   return c.json({ message: 'Penugasan berhasil disimpan.', job: detail })
 })
 
+// Mulai/selesai cuci, checklist, foto, pemeriksaan, unit keluar (auth sudah dipasang di atas)
 jobs.route('/', work)
 
 export default jobs

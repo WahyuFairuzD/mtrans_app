@@ -17,7 +17,7 @@ class HistoryButton extends StatelessWidget {
           );
         },
         icon: const Icon(Icons.history),
-        label: const Text('Riwayat Bus Selesai Dicuci'),
+        label: const Text('Riwayat Pencucian'),
         style: OutlinedButton.styleFrom(
           foregroundColor: Colors.black,
           backgroundColor: Colors.white,
