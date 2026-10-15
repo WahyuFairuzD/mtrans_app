@@ -6,6 +6,7 @@ import { ValidationError } from './lib/validate'
 import auth from './routes/auth'
 import jobs from './routes/jobs'
 import lookups from './routes/lookups'
+import stock from './routes/stock'
 import units from './routes/units'
 import type { AppEnv } from './types'
 
@@ -26,6 +27,7 @@ app.get('/', (c) => c.json({ name: 'mtrans-api', status: 'ok' }))
 app.route('/auth', auth)
 app.route('/units', units)
 app.route('/jobs', jobs)
+app.route('/stock', stock)
 app.route('/', lookups)
 
 app.notFound((c) => c.json(apiError('NOT_FOUND', 'Endpoint tidak ditemukan.'), 404))
