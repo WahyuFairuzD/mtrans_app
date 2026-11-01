@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../attendance/owner_attendance_page.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
 import '../stock/stock_page.dart';
 import '../../services/app_data.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/wib.dart';
+import '../../widgets/attendance_widgets.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
@@ -150,6 +152,18 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                           ),
 
                           const SizedBox(height: 14),
+                          AttendanceEntryCard(
+                            title: 'Absensi Hari Ini',
+                            subtitle: 'Pantau absensi semua cabang',
+                            icon: Icons.fact_check_outlined,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OwnerAttendancePage(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           _StockEntry(
                             onTap: () => Navigator.push(
                               context,

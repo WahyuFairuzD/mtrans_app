@@ -72,6 +72,7 @@ function toAuthUser(profile: Profile, email: string): AuthUser {
     full_name: profile.full_name,
     phone: profile.phone,
     role: profile.role,
+    branch_id: profile.branch_id,
   }
 }
 

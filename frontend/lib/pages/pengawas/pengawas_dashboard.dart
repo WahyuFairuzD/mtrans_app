@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../attendance/attendance_page.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
@@ -6,6 +7,7 @@ import '../../services/review_service.dart';
 import '../stock/stock_page.dart';
 import '../../theme/app_theme.dart';
 import '../../services/app_data.dart';
+import '../../widgets/attendance_widgets.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
@@ -293,6 +295,18 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                       ),
 
                       const SizedBox(height: 14),
+                      AttendanceEntryCard(
+                        title: 'Absensi',
+                        subtitle: 'Catat absen masuk dan pulang',
+                        icon: Icons.fact_check_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AttendancePage(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       _StockEntry(
                         onTap: () => Navigator.push(
                           context,

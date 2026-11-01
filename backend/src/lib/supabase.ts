@@ -21,7 +21,7 @@ export async function getProfile(
 ): Promise<Profile | null> {
   const { data, error } = await admin
     .from('profiles')
-    .select('id, full_name, phone, role, is_active')
+    .select('id, full_name, phone, role, is_active, branch_id')
     .eq('id', userId)
     .maybeSingle()
 

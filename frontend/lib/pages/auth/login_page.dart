@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/branch_selection_sheet.dart';
 import '../../theme/app_theme.dart';
 import 'register_page.dart';
 import 'verify_otp_page.dart';
@@ -44,7 +45,11 @@ class _LoginPageState extends State<LoginPage> {
     final email = _email.text.trim();
 
     try {
-      await AuthService.instance.login(email: email, password: _password.text);
+      await AuthService.instance.login(
+        email: email,
+        password: _password.text,
+        selectBranch: () => selectAttendanceBranch(context),
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
 

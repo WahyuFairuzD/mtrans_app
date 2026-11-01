@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../attendance/attendance_page.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
 import '../../services/app_data.dart';
 import '../../services/work_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/attendance_widgets.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
@@ -57,9 +59,9 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _start(BusWash bus) async {
@@ -111,9 +113,7 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
   Future<void> _openWork(BusWash bus) async {
     final result = await Navigator.push<BusWash>(
       context,
-      MaterialPageRoute(
-        builder: (_) => WorkPage(bus: bus),
-      ),
+      MaterialPageRoute(builder: (_) => WorkPage(bus: bus)),
     );
 
     if (result == null || !mounted) return;
@@ -135,12 +135,10 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
     final workingBuses = _by([WashStatus.dalamPengerjaan]);
     final inspectionBuses = _by([WashStatus.menungguPemeriksaan]);
 
-    final noTasks = waitingBuses.isEmpty &&
-        workingBuses.isEmpty &&
-        inspectionBuses.isEmpty;
+    final noTasks =
+        waitingBuses.isEmpty && workingBuses.isEmpty && inspectionBuses.isEmpty;
 
-    final showEmpty =
-        noTasks && _appData.loaded && _appData.error == null;
+    final showEmpty = noTasks && _appData.loaded && _appData.error == null;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -230,7 +228,18 @@ class _PegawaiDashboardState extends State<PegawaiDashboard> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      AttendanceEntryCard(
+                        title: 'Absensi',
+                        subtitle: 'Catat absen masuk dan pulang',
+                        icon: Icons.fact_check_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AttendancePage(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
                       const Text(
                         'Tugas Saya',
                         style: TextStyle(
