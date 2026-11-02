@@ -6,6 +6,20 @@ import type { AppEnv } from '../types'
 
 const lookups = new Hono<AppEnv>()
 
+lookups.get('/branches', async (c) => {
+  const { data, error } = await adminClient(c.env)
+    .from('branches')
+    .select('id, name')
+    .order('name')
+
+  if (error) {
+    console.error(error)
+    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil daftar cabang.'), 500)
+  }
+  return c.json({ data })
+})
+
+
 lookups.get(
   '/locations',
   requireAuth,

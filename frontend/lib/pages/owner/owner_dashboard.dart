@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../attendance/owner_attendance_page.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
-import '../stock_page.dart';
+import '../stock/stock_page.dart';
 import '../../services/app_data.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/wib.dart';
+import '../../widgets/attendance_widgets.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
@@ -48,8 +50,9 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               return '${buses.where((bus) => statuses.contains(bus.status)).length}';
             }
 
-            final enteredToday =
-                buses.where((bus) => bus.date == kToday).length;
+            final enteredToday = buses
+                .where((bus) => bus.date == kToday)
+                .length;
 
             return RefreshIndicator(
               onRefresh: _appData.refresh,
@@ -122,23 +125,13 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                                 color: Colors.blue,
                               ),
                               StatCard(
-                                number: count([
-                                  WashStatus.terdaftar,
-                                  WashStatus.menungguDikerjakan,
-                                ]),
-                                title: 'Menunggu',
-                                icon: Icons.access_time,
-                                color: Colors.grey,
-                              ),
-                              StatCard(
                                 number: count([WashStatus.dalamPengerjaan]),
                                 title: 'Dikerjakan',
                                 icon: Icons.autorenew,
                                 color: Colors.orange,
                               ),
                               StatCard(
-                                number:
-                                    count([WashStatus.menungguPemeriksaan]),
+                                number: count([WashStatus.menungguPemeriksaan]),
                                 title: 'Perlu Diperiksa',
                                 icon: Icons.fact_check_outlined,
                                 color: Colors.purple,
@@ -159,10 +152,26 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                           ),
 
                           const SizedBox(height: 14),
-                          _StockEntry(onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const StockPage()),
-                          )),
+                          AttendanceEntryCard(
+                            title: 'Absensi Hari Ini',
+                            subtitle: 'Pantau absensi semua cabang',
+                            icon: Icons.fact_check_outlined,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OwnerAttendancePage(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _StockEntry(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const StockPage(),
+                              ),
+                            ),
+                          ),
 
                           const SizedBox(height: 28),
                           const Text(
@@ -233,17 +242,39 @@ class _StockEntry extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-        child: const Row(children: [
-          CircleAvatar(backgroundColor: Color(0xFFEAF2FF), child: Icon(Icons.inventory_2_outlined, color: Colors.blue)),
-          SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Kelola Stok', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 3),
-            Text('Lihat persediaan dan catat perubahan', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ])),
-          Icon(Icons.chevron_right, color: AppColors.textSecondary),
-        ]),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: Color(0xFFEAF2FF),
+              child: Icon(Icons.inventory_2_outlined, color: Colors.blue),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Kelola Stok',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Lihat persediaan dan catat perubahan',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          ],
+        ),
       ),
     ),
   );

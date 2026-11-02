@@ -37,6 +37,7 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
     full_name: profile.full_name,
     phone: profile.phone,
     role: profile.role,
+    branch_id: profile.branch_id,
   })
 
   await next()

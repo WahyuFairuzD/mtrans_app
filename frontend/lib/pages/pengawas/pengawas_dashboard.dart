@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import '../attendance/attendance_page.dart';
 import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
 import '../../services/review_service.dart';
-import '../stock_page.dart';
+import '../stock/stock_page.dart';
 import '../../theme/app_theme.dart';
 import '../../services/app_data.dart';
+import '../../widgets/attendance_widgets.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
@@ -60,17 +62,15 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _addBus() async {
     final result = await Navigator.push<BusWash>(
       context,
-      MaterialPageRoute(
-        builder: (_) => const InputBusPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const InputBusPage()),
     );
 
     if (result == null || !mounted) return;
@@ -81,9 +81,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
   Future<void> _assign(BusWash bus) async {
     final result = await Navigator.push<BusWash>(
       context,
-      MaterialPageRoute(
-        builder: (_) => AssignPage(bus: bus),
-      ),
+      MaterialPageRoute(builder: (_) => AssignPage(bus: bus)),
     );
 
     if (result == null || !mounted) return;
@@ -96,9 +94,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
   Future<void> _inspect(BusWash bus) async {
     final result = await Navigator.push<BusWash>(
       context,
-      MaterialPageRoute(
-        builder: (_) => InspectionPage(bus: bus),
-      ),
+      MaterialPageRoute(builder: (_) => InspectionPage(bus: bus)),
     );
 
     if (result == null || !mounted) return;
@@ -169,10 +165,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
       const SizedBox(height: 24),
       Text(
         '$title (${items.length})',
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 12),
       ...items.map(
@@ -201,7 +194,8 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
 
     final toExit = _by([WashStatus.selesai]);
 
-    final isEmpty = _appData.loaded &&
+    final isEmpty =
+        _appData.loaded &&
         _appData.error == null &&
         _appData.operational.isEmpty;
 
@@ -301,6 +295,18 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                       ),
 
                       const SizedBox(height: 14),
+                      AttendanceEntryCard(
+                        title: 'Absensi',
+                        subtitle: 'Catat absen masuk dan pulang',
+                        icon: Icons.fact_check_outlined,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AttendancePage(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       _StockEntry(
                         onTap: () => Navigator.push(
                           context,
@@ -390,17 +396,39 @@ class _StockEntry extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
-        child: const Row(children: [
-          CircleAvatar(backgroundColor: Color(0xFFEAF2FF), child: Icon(Icons.inventory_2_outlined, color: Colors.blue)),
-          SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Kelola Stok', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 3),
-            Text('Lihat persediaan dan catat perubahan', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          ])),
-          Icon(Icons.chevron_right, color: AppColors.textSecondary),
-        ]),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: Color(0xFFEAF2FF),
+              child: Icon(Icons.inventory_2_outlined, color: Colors.blue),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Kelola Stok',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Lihat persediaan dan catat perubahan',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.textSecondary),
+          ],
+        ),
       ),
     ),
   );

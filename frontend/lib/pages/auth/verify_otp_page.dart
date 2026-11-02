@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/branch_selection_sheet.dart';
 import '../../theme/app_theme.dart';
 
 class VerifyOtpPage extends StatefulWidget {
@@ -115,7 +116,11 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
     });
 
     try {
-      await AuthService.instance.verifyOtp(email: widget.email, code: code);
+      await AuthService.instance.verifyOtp(
+        email: widget.email,
+        code: code,
+        selectBranch: () => selectAttendanceBranch(context),
+      );
 
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -158,10 +163,7 @@ class _VerifyOtpPageState extends State<VerifyOtpPage> {
                   const Text(
                     'Masukkan kode verifikasi',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(

@@ -4,6 +4,7 @@ import { HTTPException } from 'hono/http-exception'
 import { apiError } from './lib/response'
 import { ValidationError } from './lib/validate'
 import auth from './routes/auth'
+import attendance from './routes/attendance'
 import jobs from './routes/jobs'
 import lookups from './routes/lookups'
 import stock from './routes/stock'
@@ -25,6 +26,7 @@ app.use(
 app.get('/', (c) => c.json({ name: 'mtrans-api', status: 'ok' }))
 
 app.route('/auth', auth)
+app.route('/attendance', attendance)
 app.route('/units', units)
 app.route('/jobs', jobs)
 app.route('/stock', stock)
