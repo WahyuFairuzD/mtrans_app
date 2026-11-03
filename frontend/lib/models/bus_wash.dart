@@ -26,17 +26,15 @@ enum WashStatus {
 class Employee {
   final String name;
   final String role;
-  const Employee({
-    required this.name,
-    required this.role,
-  });
+  const Employee({required this.name, required this.role});
 }
 
 class BusWash {
   final String id;
   final String? jobCode;
   final String? unitId;
-  final String? locationName;
+  final int? branchId;
+  final String? branchName;
   final String? serviceName;
   final String plateNumber;
   final String brand;
@@ -48,10 +46,8 @@ class BusWash {
   final String? inspectionTime;
   final String? exitTime;
   final List<Employee> employees;
-  final List<String> checklist;
   final String? initialNote;
   final String? inspectionNote;
-  final String? photo;
 
   const BusWash({
     required this.id,
@@ -61,7 +57,8 @@ class BusWash {
     required this.date,
     this.jobCode,
     this.unitId,
-    this.locationName,
+    this.branchId,
+    this.branchName,
     this.serviceName,
     this.entryTime,
     this.startTime,
@@ -69,16 +66,15 @@ class BusWash {
     this.inspectionTime,
     this.exitTime,
     this.employees = const [],
-    this.checklist = const [],
     this.initialNote,
     this.inspectionNote,
-    this.photo,
   });
 
   factory BusWash.fromJson(Map<String, dynamic> j) {
     final entered = _parse(j['entered_at']);
     final brandRaw = (j['brand'] as String?)?.trim();
-    final names = (j['pegawai_names'] as String?)
+    final names =
+        (j['pegawai_names'] as String?)
             ?.split(', ')
             .map((n) => n.trim())
             .where((n) => n.isNotEmpty)
@@ -89,7 +85,8 @@ class BusWash {
       id: j['id'] as String,
       jobCode: j['job_code'] as String?,
       unitId: j['unit_id'] as String?,
-      locationName: j['location_name'] as String?,
+      branchId: (j['branch_id'] as num?)?.toInt(),
+      branchName: j['branch_name'] as String?,
       serviceName: j['service_name'] as String?,
       plateNumber: (j['plate_number'] as String?) ?? '-',
       brand: (brandRaw == null || brandRaw.isEmpty) ? '-' : brandRaw,
@@ -105,40 +102,6 @@ class BusWash {
           .toList(),
       initialNote: j['initial_condition_notes'] as String?,
       inspectionNote: _inspectionText(j),
-    );
-  }
-
-  BusWash copyWith({
-    WashStatus? status,
-    String? startTime,
-    String? endTime,
-    String? inspectionTime,
-    String? exitTime,
-    List<Employee>? employees,
-    List<String>? checklist,
-    String? inspectionNote,
-    String? photo,
-  }) {
-    return BusWash(
-      id: id,
-      jobCode: jobCode,
-      unitId: unitId,
-      locationName: locationName,
-      serviceName: serviceName,
-      plateNumber: plateNumber,
-      brand: brand,
-      status: status ?? this.status,
-      date: date,
-      entryTime: entryTime,
-      startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
-      inspectionTime: inspectionTime ?? this.inspectionTime,
-      exitTime: exitTime ?? this.exitTime,
-      employees: employees ?? this.employees,
-      checklist: checklist ?? this.checklist,
-      initialNote: initialNote,
-      inspectionNote: inspectionNote ?? this.inspectionNote,
-      photo: photo ?? this.photo,
     );
   }
 }
@@ -166,11 +129,4 @@ String? _inspectionText(Map<String, dynamic> j) {
   return (notes == null || notes.isEmpty)
       ? 'Hasil: $label'
       : 'Hasil: $label. $notes';
-}
-
-String nowText() {
-  final t = TimeOfDay.now();
-
-  return '${t.hour.toString().padLeft(2, '0')}:'
-      '${t.minute.toString().padLeft(2, '0')}';
 }

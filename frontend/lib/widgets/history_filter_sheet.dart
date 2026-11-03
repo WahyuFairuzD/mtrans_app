@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/assignment.dart';
+import '../models/branch.dart';
 import '../models/bus_wash.dart';
 import '../models/history_filter.dart';
 import '../models/master_data.dart';
@@ -9,11 +10,11 @@ import '../services/pegawai_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/wib.dart';
 
-/// Mengembalikan filter baru, atau null kalau ditutup tanpa menerapkan.
 Future<HistoryFilter?> showHistoryFilterSheet(
   BuildContext context, {
   required HistoryFilter current,
   required bool canFilterMaster,
+  required bool canFilterBranch,
 }) {
   return showModalBottomSheet<HistoryFilter>(
     context: context,
@@ -25,6 +26,7 @@ Future<HistoryFilter?> showHistoryFilterSheet(
     builder: (_) => _FilterSheet(
       current: current,
       canFilterMaster: canFilterMaster,
+      canFilterBranch: canFilterBranch,
     ),
   );
 }
@@ -32,8 +34,13 @@ Future<HistoryFilter?> showHistoryFilterSheet(
 class _FilterSheet extends StatefulWidget {
   final HistoryFilter current;
   final bool canFilterMaster;
+  final bool canFilterBranch;
 
-  const _FilterSheet({required this.current, required this.canFilterMaster});
+  const _FilterSheet({
+    required this.current,
+    required this.canFilterMaster,
+    required this.canFilterBranch,
+  });
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -44,16 +51,18 @@ class _FilterSheetState extends State<_FilterSheet> {
   DateTime? _from;
   DateTime? _to;
   late Set<WashStatus> _statuses;
-  String? _locationId;
+  int? _branchId;
   String? _serviceId;
   String? _pegawaiId;
 
-  List<LocationItem> _locations = [];
+  List<Branch> _branches = [];
   List<ServiceTypeItem> _services = [];
   List<PegawaiItem> _pegawai = [];
 
   bool _loadingLookups = false;
   String? _lookupError;
+
+  bool get _needsLookups => widget.canFilterMaster || widget.canFilterBranch;
 
   @override
   void initState() {
@@ -64,11 +73,11 @@ class _FilterSheetState extends State<_FilterSheet> {
     _from = c.customFrom;
     _to = c.customTo;
     _statuses = {...c.statuses};
-    _locationId = c.locationId;
+    _branchId = c.branchId;
     _serviceId = c.serviceTypeId;
     _pegawaiId = c.pegawaiId;
 
-    if (widget.canFilterMaster) _loadLookups();
+    if (_needsLookups) _loadLookups();
   }
 
   Future<void> _loadLookups() async {
@@ -78,25 +87,28 @@ class _FilterSheetState extends State<_FilterSheet> {
     });
 
     try {
-      final results = await Future.wait<Object>([
-        MasterService.instance.fetchLocations(),
-        MasterService.instance.fetchServiceTypes(),
-        PegawaiService.instance.fetchPegawai(),
-      ]);
+      final master = MasterService.instance;
+      final branches = widget.canFilterBranch
+          ? await master.fetchBranches()
+          : <Branch>[];
+      final services = widget.canFilterMaster
+          ? await master.fetchServiceTypes()
+          : <ServiceTypeItem>[];
+      final pegawai = widget.canFilterMaster
+          ? await PegawaiService.instance.fetchPegawai()
+          : <PegawaiItem>[];
 
       if (!mounted) return;
 
       setState(() {
-        _locations = results[0] as List<LocationItem>;
-        _services = results[1] as List<ServiceTypeItem>;
-        _pegawai = results[2] as List<PegawaiItem>;
+        _branches = branches;
+        _services = services;
+        _pegawai = pegawai;
       });
     } on ApiException catch (e) {
       if (mounted) setState(() => _lookupError = e.message);
     } catch (_) {
-      if (mounted) {
-        setState(() => _lookupError = 'Gagal memuat daftar filter.');
-      }
+      if (mounted) setState(() => _lookupError = 'Gagal memuat daftar filter.');
     } finally {
       if (mounted) setState(() => _loadingLookups = false);
     }
@@ -134,7 +146,7 @@ class _FilterSheetState extends State<_FilterSheet> {
       _from = null;
       _to = null;
       _statuses = {};
-      _locationId = null;
+      _branchId = null;
       _serviceId = null;
       _pegawaiId = null;
     });
@@ -150,7 +162,7 @@ class _FilterSheetState extends State<_FilterSheet> {
         customFrom: _preset == DatePreset.custom ? _from : null,
         customTo: _preset == DatePreset.custom ? _to : null,
         statuses: _statuses,
-        locationId: _locationId,
+        branchId: _branchId,
         serviceTypeId: _serviceId,
         pegawaiId: _pegawaiId,
         unitId: c.unitId,
@@ -169,28 +181,21 @@ class _FilterSheetState extends State<_FilterSheet> {
     return p.label;
   }
 
-  Widget _dropdown({
+  Widget _dropdown<T>({
     required String label,
-    required String? value,
-    required List<DropdownMenuItem<String?>> items,
-    required ValueChanged<String?> onChanged,
+    required T? value,
+    required List<DropdownMenuItem<T?>> items,
+    required ValueChanged<T?> onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: DropdownButtonFormField<String?>(
+      child: DropdownButtonFormField<T?>(
         key: ValueKey('$label-$value'),
         initialValue: value,
         isExpanded: true,
-        decoration: InputDecoration(
-          labelText: label,
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        decoration: filledInputDecoration(label),
         items: [
-          const DropdownMenuItem<String?>(value: null, child: Text('Semua')),
+          DropdownMenuItem<T?>(value: null, child: const Text('Semua')),
           ...items,
         ],
         onChanged: onChanged,
@@ -208,15 +213,87 @@ class _FilterSheetState extends State<_FilterSheet> {
     );
   }
 
+  Widget _lookupFields() {
+    if (_loadingLookups) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
+
+    if (_lookupError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _lookupError!,
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+            TextButton(onPressed: _loadLookups, child: const Text('Coba lagi')),
+          ],
+        ),
+      );
+    }
+
+    final branchValue = _branches.any((b) => b.id == _branchId)
+        ? _branchId
+        : null;
+    final serviceValue = _services.any((s) => s.id == _serviceId)
+        ? _serviceId
+        : null;
+    final pegawaiValue = _pegawai.any((p) => p.id == _pegawaiId)
+        ? _pegawaiId
+        : null;
+
+    return Column(
+      children: [
+        if (widget.canFilterBranch)
+          _dropdown<int>(
+            label: 'Cabang',
+            value: branchValue,
+            items: _branches
+                .map((b) => DropdownMenuItem<int?>(value: b.id, child: Text(b.name)))
+                .toList(),
+            onChanged: (v) => setState(() => _branchId = v),
+          ),
+        if (widget.canFilterMaster) ...[
+          _dropdown<String>(
+            label: 'Jenis layanan',
+            value: serviceValue,
+            items: _services
+                .map((s) => DropdownMenuItem<String?>(value: s.id, child: Text(s.name)))
+                .toList(),
+            onChanged: (v) => setState(() => _serviceId = v),
+          ),
+          _dropdown<String>(
+            label: 'Petugas',
+            value: pegawaiValue,
+            items: _pegawai
+                .map(
+                  (p) => DropdownMenuItem<String?>(
+                    value: p.id,
+                    child: Text(p.fullName),
+                  ),
+                )
+                .toList(),
+            onChanged: (v) => setState(() => _pegawaiId = v),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final locationValue =
-        _locations.any((l) => l.id == _locationId) ? _locationId : null;
-    final serviceValue =
-        _services.any((s) => s.id == _serviceId) ? _serviceId : null;
-    final pegawaiValue =
-        _pegawai.any((p) => p.id == _pegawaiId) ? _pegawaiId : null;
-
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -287,80 +364,9 @@ class _FilterSheetState extends State<_FilterSheet> {
               }).toList(),
             ),
 
-            if (widget.canFilterMaster) ...[
+            if (_needsLookups) ...[
               const SizedBox(height: 16),
-              if (_loadingLookups)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
-                  ),
-                )
-              else if (_lookupError != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _lookupError!,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _loadLookups,
-                        child: const Text('Coba lagi'),
-                      ),
-                    ],
-                  ),
-                )
-              else ...[
-                _dropdown(
-                  label: 'Lokasi',
-                  value: locationValue,
-                  items: _locations
-                      .map(
-                        (l) => DropdownMenuItem<String?>(
-                          value: l.id,
-                          child: Text(l.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _locationId = v),
-                ),
-                _dropdown(
-                  label: 'Jenis layanan',
-                  value: serviceValue,
-                  items: _services
-                      .map(
-                        (s) => DropdownMenuItem<String?>(
-                          value: s.id,
-                          child: Text(s.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _serviceId = v),
-                ),
-                _dropdown(
-                  label: 'Petugas',
-                  value: pegawaiValue,
-                  items: _pegawai
-                      .map(
-                        (p) => DropdownMenuItem<String?>(
-                          value: p.id,
-                          child: Text(p.fullName),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (v) => setState(() => _pegawaiId = v),
-                ),
-              ],
+              _lookupFields(),
             ],
 
             const SizedBox(height: 8),

@@ -12,9 +12,14 @@ class StockService {
 
   Dio get _dio => ApiClient.dio;
 
-  Future<({List<StockItem> items, int changesToday})> fetchItems() async {
+  Future<({List<StockItem> items, int changesToday})> fetchItems({
+    int? branchId,
+  }) async {
     try {
-      final res = await _dio.get('/stock/items');
+      final res = await _dio.get(
+        '/stock/items',
+        queryParameters: branchId == null ? null : {'branch_id': branchId},
+      );
       final body = res.data as Map<String, dynamic>;
       final items = (body['data'] as List)
           .map((e) => StockItem.fromJson(e as Map<String, dynamic>))
@@ -30,6 +35,7 @@ class StockService {
   }
 
   Future<StockChange> createItem({
+    int? branchId,
     required String name,
     required String category,
     required String unit,
@@ -39,6 +45,7 @@ class StockService {
       final res = await _dio.post(
         '/stock/items',
         data: {
+          if (branchId != null) 'branch_id': branchId,
           'name': name,
           'category': category,
           'unit': unit,
@@ -73,6 +80,7 @@ class StockService {
   }
 
   Future<List<StockMovement>> fetchMovements({
+    int? branchId,
     DateTime? from,
     DateTime? to,
     int offset = 0,
@@ -84,6 +92,7 @@ class StockService {
         queryParameters: {
           'limit': limit,
           'offset': offset,
+          if (branchId != null) 'branch_id': branchId,
           if (from != null) 'from': _wibIso(from, endOfDay: false),
           if (to != null) 'to': _wibIso(to, endOfDay: true),
         },

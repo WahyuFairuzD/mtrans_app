@@ -3,28 +3,21 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../models/attendance.dart';
-import '../models/branch.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
+import 'auth_service.dart';
 
 class AttendanceService {
-  AttendanceService._();
+  AttendanceService._() {
+    AuthService.instance.addListener(() {
+      if (AuthService.instance.user == null) _photoCache.clear();
+    });
+  }
   static final AttendanceService instance = AttendanceService._();
 
   Dio get _dio => ApiClient.dio;
 
-  Future<List<Branch>> fetchBranches() async {
-    try {
-      final response = await _dio.get('/branches');
-      final body = response.data as Map<String, dynamic>;
-      return (body['data'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(Branch.fromJson)
-          .toList();
-    } on DioException catch (error) {
-      throw ApiException.fromDio(error);
-    }
-  }
+  final Map<String, Future<Uint8List>> _photoCache = {};
 
   Future<List<AttendanceRecord>> fetchMyToday() async {
     try {
@@ -82,6 +75,22 @@ class AttendanceService {
         body['attendance'] as Map<String, dynamic>,
       );
     } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  Future<Uint8List> photoBytes(String attendanceId) =>
+      _photoCache.putIfAbsent(attendanceId, () => _loadPhoto(attendanceId));
+
+  Future<Uint8List> _loadPhoto(String attendanceId) async {
+    try {
+      final response = await _dio.get<List<int>>(
+        '/attendance/$attendanceId/photo',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data ?? const <int>[]);
+    } on DioException catch (error) {
+      _photoCache.remove(attendanceId);
       throw ApiException.fromDio(error);
     }
   }

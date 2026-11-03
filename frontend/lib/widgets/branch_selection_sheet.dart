@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-
 import '../models/branch.dart';
 import '../services/api_exception.dart';
-import '../services/attendance_service.dart';
 import '../services/auth_service.dart';
+import '../services/master_service.dart';
 import '../theme/app_theme.dart';
 
 Future<int?> selectAttendanceBranch(BuildContext context) async {
   List<Branch> branches;
   try {
-    branches = await AttendanceService.instance.fetchBranches();
+    branches = await MasterService.instance.fetchBranches();
   } on ApiException catch (error) {
     throw AuthException(error.message);
   }

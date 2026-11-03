@@ -33,18 +33,3 @@ class ChecklistItem {
     );
   }
 }
-
-class JobPhoto {
-  final String id;
-  final DateTime? createdAt;
-
-  const JobPhoto({required this.id, this.createdAt});
-
-  factory JobPhoto.fromJson(Map<String, dynamic> j) {
-    final raw = j['created_at'];
-    return JobPhoto(
-      id: j['id'] as String,
-      createdAt: raw is String ? DateTime.tryParse(raw) : null,
-    );
-  }
-}

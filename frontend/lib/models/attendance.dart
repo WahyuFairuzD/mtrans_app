@@ -17,7 +17,6 @@ class AttendanceRecord {
     required this.workDate,
     required this.latitude,
     required this.longitude,
-    required this.photoUrl,
     required this.fullName,
     required this.role,
     required this.branchName,
@@ -33,7 +32,6 @@ class AttendanceRecord {
   final double latitude;
   final double longitude;
   final double? accuracyM;
-  final String photoUrl;
   final String fullName;
   final String role;
   final String branchName;
@@ -54,12 +52,9 @@ class AttendanceRecord {
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
       accuracyM: (json['accuracy_m'] as num?)?.toDouble(),
-      photoUrl: (json['photo_url'] as String?) ?? '',
       fullName: (json['full_name'] as String?) ?? '',
       role: (json['role'] as String?) ?? '',
       branchName: (json['branch_name'] as String?) ?? '',
     );
   }
-
-  DateTime get wibTime => attendedAt.add(const Duration(hours: 7));
 }

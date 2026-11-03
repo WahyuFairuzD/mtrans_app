@@ -5,6 +5,9 @@ import '../../services/api_exception.dart';
 import '../../services/job_service.dart';
 import '../../services/pegawai_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dialogs.dart';
+import '../../widgets/bus_header_card.dart';
+import '../../widgets/error_state.dart';
 
 class AssignPage extends StatefulWidget {
   final BusWash bus;
@@ -33,9 +36,7 @@ class _AssignPageState extends State<AssignPage> {
   List<PegawaiItem> get _filtered {
     final q = _search.text.trim().toLowerCase();
     if (q.isEmpty) return _pegawai;
-    return _pegawai
-        .where((p) => p.fullName.toLowerCase().contains(q))
-        .toList();
+    return _pegawai.where((p) => p.fullName.toLowerCase().contains(q)).toList();
   }
 
   @override
@@ -101,12 +102,6 @@ class _AssignPageState extends State<AssignPage> {
     });
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
   Future<void> _save() async {
     if (!_valid) return;
 
@@ -122,23 +117,12 @@ class _AssignPageState extends State<AssignPage> {
       if (!mounted) return;
       Navigator.pop<BusWash>(context, bus);
     } on ApiException catch (e) {
-      if (mounted) _showError(e.message);
+      if (mounted) showSnack(context, e.message);
     } catch (_) {
-      if (mounted) _showError('Terjadi kesalahan. Coba lagi.');
+      if (mounted) showSnack(context, 'Terjadi kesalahan. Coba lagi.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  InputDecoration _decoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
   }
 
   @override
@@ -155,32 +139,10 @@ class _AssignPageState extends State<AssignPage> {
     if (_loadError != null) {
       return Scaffold(
         appBar: AppBar(title: Text(title)),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_off, size: 40, color: Colors.grey),
-                const SizedBox(height: 12),
-                Text(
-                  _loadError!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _load,
-                  child: const Text('Coba lagi'),
-                ),
-              ],
-            ),
-          ),
-        ),
+        body: ErrorState(message: _loadError!, onRetry: _load),
       );
     }
 
-    final bus = widget.bus;
     final shown = _filtered;
 
     return Scaffold(
@@ -188,59 +150,8 @@ class _AssignPageState extends State<AssignPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 45,
-                  height: 45,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.directions_bus,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        bus.plateNumber,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          bus.brand,
-                          if (bus.serviceName != null) bus.serviceName!,
-                        ].join(' • '),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
+          BusHeaderCard(bus: widget.bus),
           const SizedBox(height: 20),
-
           Row(
             children: [
               const Expanded(
@@ -258,39 +169,19 @@ class _AssignPageState extends State<AssignPage> {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
           TextField(
             controller: _search,
             onChanged: (_) => setState(() {}),
-            decoration: _decoration('Cari nama petugas').copyWith(
-              prefixIcon: const Icon(Icons.search),
-            ),
+            decoration: filledInputDecoration(
+              'Cari nama petugas',
+            ).copyWith(prefixIcon: const Icon(Icons.search)),
           ),
-
           const SizedBox(height: 8),
-
           if (_pegawai.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'Belum ada akun Petugas yang aktif.',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
-              ),
-            )
+            const _EmptyNote('Belum ada akun Petugas yang aktif.')
           else if (shown.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'Petugas tidak ditemukan.',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
-              ),
-            )
+            const _EmptyNote('Petugas tidak ditemukan.')
           else
             Container(
               decoration: BoxDecoration(
@@ -316,19 +207,17 @@ class _AssignPageState extends State<AssignPage> {
                     .toList(),
               ),
             ),
-
           const SizedBox(height: 20),
-
           TextField(
             controller: _instructions,
             maxLines: 3,
             maxLength: 255,
-            decoration: _decoration('Instruksi pekerjaan (opsional)')
-                .copyWith(alignLabelWithHint: true),
+            decoration: filledInputDecoration(
+              'Instruksi pekerjaan (opsional)',
+              multiline: true,
+            ),
           ),
-
           const SizedBox(height: 12),
-
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -351,6 +240,25 @@ class _AssignPageState extends State<AssignPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyNote extends StatelessWidget {
+  const _EmptyNote(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Text(
+          message,
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
       ),
     );
   }

@@ -7,6 +7,8 @@ export const uuidPattern =
 
 const isoWithZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
 
+const MAX_SMALLINT = 32767
+
 export class ValidationError extends Error {}
 
 export type JsonObject = Record<string, unknown>
@@ -70,6 +72,27 @@ export function optionalUuid(v: unknown, label: string): string | undefined {
   return requiredUuid(v, label)
 }
 
+export function requiredBranchId(v: unknown, label = 'Cabang'): number {
+  if (v === undefined || v === null || v === '') {
+    throw new ValidationError(`${label} wajib dipilih.`)
+  }
+  const n = typeof v === 'string' ? Number(v) : v
+  if (
+    typeof n !== 'number' ||
+    !Number.isInteger(n) ||
+    n < 1 ||
+    n > MAX_SMALLINT
+  ) {
+    throw new ValidationError(`${label} tidak valid.`)
+  }
+  return n
+}
+
+export function optionalBranchId(v: unknown, label = 'Cabang'): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined
+  return requiredBranchId(v, label)
+}
+
 export function intValue(
   v: unknown,
   label: string,
@@ -110,6 +133,22 @@ export function boolValue(v: unknown, label: string): boolean | undefined {
     throw new ValidationError(`${label} harus berupa true atau false.`)
   }
   return v
+}
+
+export function formNumber(v: unknown, label: string): number {
+  if (typeof v !== 'string' || v.trim() === '') {
+    throw new ValidationError(`${label} wajib diisi.`)
+  }
+  const n = Number(v)
+  if (!Number.isFinite(n)) {
+    throw new ValidationError(`${label} tidak valid.`)
+  }
+  return n
+}
+
+export function optionalFormNumber(v: unknown, label: string): number | null {
+  if (v === undefined || v === null || v === '') return null
+  return formNumber(v, label)
 }
 
 export function isoDateTime(v: unknown, label: string): string | undefined {

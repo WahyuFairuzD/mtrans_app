@@ -1,4 +1,3 @@
-/// Satu barang di daftar stok.
 class StockItem {
   const StockItem({
     required this.id,
@@ -6,6 +5,7 @@ class StockItem {
     required this.category,
     required this.unit,
     required this.quantity,
+    this.branchId,
   });
 
   final String id;
@@ -13,6 +13,7 @@ class StockItem {
   final String category;
   final String unit;
   final int quantity;
+  final int? branchId;
 
   factory StockItem.fromJson(Map<String, dynamic> json) => StockItem(
     id: json['id'] as String,
@@ -20,8 +21,10 @@ class StockItem {
     category: json['category'] as String,
     unit: json['unit'] as String,
     quantity: (json['quantity'] as num).toInt(),
+    branchId: (json['branch_id'] as num?)?.toInt(),
   );
 }
+
 class StockMovement {
   const StockMovement({
     required this.id,
@@ -34,6 +37,7 @@ class StockMovement {
     required this.person,
     required this.time,
     required this.message,
+    this.branchName = '',
   });
 
   final int id;
@@ -46,6 +50,7 @@ class StockMovement {
   final String person;
   final DateTime time;
   final String message;
+  final String branchName;
 
   bool get isAddition => amount > 0;
 
@@ -60,8 +65,10 @@ class StockMovement {
     person: (json['created_by_name'] as String?) ?? 'Pengguna',
     time: _toWib(json['created_at'] as String),
     message: (json['message'] as String?) ?? '',
+    branchName: (json['branch_name'] as String?) ?? '',
   );
 }
+
 typedef StockChange = ({StockItem item, StockMovement? movement});
 
 DateTime _toWib(String iso) =>

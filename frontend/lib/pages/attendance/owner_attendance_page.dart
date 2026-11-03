@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-
 import '../../models/attendance.dart';
 import '../../models/branch.dart';
 import '../../services/api_exception.dart';
 import '../../services/attendance_service.dart';
+import '../../services/master_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/wib.dart';
 import '../../widgets/attendance_widgets.dart';
 import '../../widgets/branch_filter_chips.dart';
 
@@ -34,14 +35,14 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        _service.fetchBranches(),
+      final (branches, records) = await (
+        MasterService.instance.fetchBranches(),
         _service.fetchOwnerToday(branchId: _selectedBranch),
-      ]);
+      ).wait;
       if (!mounted) return;
       setState(() {
-        _branches = results[0] as List<Branch>;
-        _records = results[1] as List<AttendanceRecord>;
+        _branches = branches;
+        _records = records;
       });
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -207,6 +208,7 @@ class _SummaryCard extends StatelessWidget {
 class _EmployeeAttendanceCard extends StatelessWidget {
   const _EmployeeAttendanceCard({required this.records});
   final List<AttendanceRecord> records;
+
   AttendanceRecord? _byType(AttendanceType type) {
     for (final record in records) {
       if (record.type == type) return record;
@@ -214,11 +216,8 @@ class _EmployeeAttendanceCard extends StatelessWidget {
     return null;
   }
 
-  String _time(AttendanceRecord? record) {
-    if (record == null) return 'Belum pulang';
-    final time = record.wibTime;
-    return '${_two(time.hour)}:${_two(time.minute)}';
-  }
+  String _time(AttendanceRecord? record) =>
+      record == null ? 'Belum pulang' : wibTime(record.attendedAt);
 
   @override
   Widget build(BuildContext context) {
@@ -335,5 +334,3 @@ class _OwnerTimeRow extends StatelessWidget {
     ],
   );
 }
-
-String _two(int value) => value.toString().padLeft(2, '0');
