@@ -1,67 +1,53 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-
 import '../models/attendance.dart';
+import '../services/attendance_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/wib.dart';
 
-class AttendanceEntryCard extends StatelessWidget {
-  const AttendanceEntryCard({
+class AttendancePhotoImage extends StatelessWidget {
+  const AttendancePhotoImage({
     super.key,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
+    required this.attendanceId,
+    this.fit = BoxFit.cover,
   });
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback onTap;
+  final String attendanceId;
+  final BoxFit fit;
 
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: const Color(0xFFEAF2FF),
-              child: Icon(icon, color: AppColors.brand),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
-      ),
+  Widget _placeholder({bool loading = false}) => Container(
+    color: AppColors.background,
+    child: Center(
+      child: loading
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.broken_image_outlined, color: Colors.grey),
     ),
   );
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: AttendanceService.instance.photoBytes(attendanceId),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return _placeholder();
+
+        final bytes = snapshot.data;
+        if (bytes == null) return _placeholder(loading: true);
+        if (bytes.isEmpty) return _placeholder();
+
+        return Image.memory(
+          bytes,
+          fit: fit,
+          gaplessPlayback: true,
+          errorBuilder: (_, _, _) => _placeholder(),
+        );
+      },
+    );
+  }
 }
 
 class AttendancePhotoThumb extends StatelessWidget {
@@ -71,31 +57,15 @@ class AttendancePhotoThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onTap: record.photoUrl.isEmpty
-        ? null
-        : () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => AttendancePhotoViewer(record: record),
-            ),
-          ),
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AttendancePhotoViewer(record: record)),
+    ),
     child: ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: SizedBox(
         width: size,
         height: size,
-        child: record.photoUrl.isEmpty
-            ? Container(
-                color: AppColors.background,
-                child: const Icon(Icons.broken_image_outlined),
-              )
-            : Image.network(
-                record.photoUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: AppColors.background,
-                  child: const Icon(Icons.broken_image_outlined),
-                ),
-              ),
+        child: AttendancePhotoImage(attendanceId: record.id),
       ),
     ),
   );
@@ -107,7 +77,6 @@ class AttendanceRecordTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = record.wibTime;
     final label = record.type == AttendanceType.masuk ? 'Masuk' : 'Pulang';
     return Container(
       margin: const EdgeInsets.only(top: 10),
@@ -126,7 +95,7 @@ class AttendanceRecordTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$label · ${_two(time.hour)}:${_two(time.minute)}',
+                  '$label · ${wibTime(record.attendedAt)}',
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
@@ -167,7 +136,6 @@ class AttendancePhotoViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = record.wibTime;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -181,7 +149,10 @@ class AttendancePhotoViewer extends StatelessWidget {
             Expanded(
               child: Center(
                 child: InteractiveViewer(
-                  child: Image.network(record.photoUrl, fit: BoxFit.contain),
+                  child: AttendancePhotoImage(
+                    attendanceId: record.id,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
@@ -199,7 +170,7 @@ class AttendancePhotoViewer extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      '${_two(time.hour)}:${_two(time.minute)} · ${record.branchName}',
+                      '${wibTime(record.attendedAt)} · ${record.branchName}',
                     ),
                     Text(
                       '${record.latitude.toStringAsFixed(6)}, ${record.longitude.toStringAsFixed(6)}',
@@ -214,5 +185,3 @@ class AttendancePhotoViewer extends StatelessWidget {
     );
   }
 }
-
-String _two(int value) => value.toString().padLeft(2, '0');

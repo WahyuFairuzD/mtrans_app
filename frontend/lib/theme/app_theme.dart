@@ -9,22 +9,32 @@ class AppColors {
 
 class AppTheme {
   static ThemeData get light => ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.brand).copyWith(
-          primary: AppColors.brand,
-          onPrimary: Colors.white,
-        ),
-        scaffoldBackgroundColor: AppColors.background,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          foregroundColor: Colors.black,
-          elevation: 0,
-          titleTextStyle: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(seedColor: AppColors.brand).copyWith(
+      primary: AppColors.brand,
+      onPrimary: Colors.white,
+    ),
+    scaffoldBackgroundColor: AppColors.background,
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      foregroundColor: Colors.black,
+      elevation: 0,
+      titleTextStyle: TextStyle(
+        color: Colors.black,
+        fontSize: 20,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
+}
+
+InputDecoration filledInputDecoration(String label, {bool multiline = false}) {
+  return InputDecoration(
+    labelText: label,
+    alignLabelWithHint: multiline,
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+  );
 }

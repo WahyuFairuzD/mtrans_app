@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import '../../models/bus_wash.dart';
 import '../../models/master_data.dart';
 import '../../services/api_exception.dart';
+import '../../services/auth_service.dart';
 import '../../services/job_service.dart';
 import '../../services/master_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dialogs.dart';
+import '../../widgets/branch_badge.dart';
+import '../../widgets/error_state.dart';
 
 class InputBusPage extends StatefulWidget {
   const InputBusPage({super.key});
@@ -17,22 +21,17 @@ class _InputBusPageState extends State<InputBusPage> {
   final TextEditingController _note = TextEditingController();
 
   List<BusUnit> _units = [];
-  List<LocationItem> _locations = [];
   List<ServiceTypeItem> _services = [];
+  String? _branchName;
 
   bool _loading = true;
   bool _saving = false;
   String? _loadError;
 
   String? _unitId;
-  String? _locationId;
   String? _serviceId;
 
-  bool get _valid =>
-      _unitId != null &&
-      _locationId != null &&
-      _serviceId != null &&
-      !_saving;
+  bool get _valid => _unitId != null && _serviceId != null && !_saving;
 
   BusUnit? get _selectedUnit {
     for (final unit in _units) {
@@ -60,19 +59,24 @@ class _InputBusPageState extends State<InputBusPage> {
     });
 
     try {
-      final (units, locations, services) = await (
-        MasterService.instance.fetchUnits(),
-        MasterService.instance.fetchLocations(),
-        MasterService.instance.fetchServiceTypes(),
+      final master = MasterService.instance;
+      final (units, services, branches) = await (
+        master.fetchUnits(),
+        master.fetchServiceTypes(),
+        master.fetchBranches(),
       ).wait;
 
       if (!mounted) return;
+      final branchId = AuthService.instance.user?.branchId;
+      String? branchName;
+      for (final branch in branches) {
+        if (branch.id == branchId) branchName = branch.name;
+      }
 
       setState(() {
         _units = units;
-        _locations = locations;
         _services = services;
-        if (locations.length == 1) _locationId = locations.first.id;
+        _branchName = branchName;
         if (services.length == 1) _serviceId = services.first.id;
       });
     } on ApiException catch (e) {
@@ -106,12 +110,6 @@ class _InputBusPageState extends State<InputBusPage> {
     });
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
   Future<void> _save() async {
     if (!_valid) return;
 
@@ -122,7 +120,6 @@ class _InputBusPageState extends State<InputBusPage> {
 
       final bus = await JobService.instance.createJob(
         unitId: _unitId!,
-        locationId: _locationId!,
         serviceTypeId: _serviceId!,
         initialNote: note.isEmpty ? null : note,
       );
@@ -130,23 +127,12 @@ class _InputBusPageState extends State<InputBusPage> {
       if (!mounted) return;
       Navigator.pop<BusWash>(context, bus);
     } on ApiException catch (e) {
-      if (mounted) _showError(e.message);
+      if (mounted) showSnack(context, e.message);
     } catch (_) {
-      if (mounted) _showError('Terjadi kesalahan. Coba lagi.');
+      if (mounted) showSnack(context, 'Terjadi kesalahan. Coba lagi.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  InputDecoration _decoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
   }
 
   @override
@@ -161,46 +147,29 @@ class _InputBusPageState extends State<InputBusPage> {
     if (_loadError != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Input Bus Datang')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.cloud_off, size: 40, color: Colors.grey),
-                const SizedBox(height: 12),
-                Text(
-                  _loadError!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _load,
-                  child: const Text('Coba lagi'),
-                ),
-              ],
-            ),
-          ),
-        ),
+        body: ErrorState(message: _loadError!, onRetry: _load),
       );
     }
 
     final unit = _selectedUnit;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Input Bus Datang'),
-      ),
+      appBar: AppBar(title: const Text('Input Bus Datang')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-
+          if (_branchName != null) ...[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: BranchBadge(name: _branchName!),
+            ),
+            const SizedBox(height: 16),
+          ],
           DropdownButtonFormField<String>(
             key: ValueKey('unit-$_unitId'),
-            value: _unitId,
+            initialValue: _unitId,
             isExpanded: true,
-            decoration: _decoration('Nomor Polisi'),
+            decoration: filledInputDecoration('Nomor Polisi'),
             items: _units
                 .map(
                   (u) => DropdownMenuItem<String>(
@@ -211,9 +180,7 @@ class _InputBusPageState extends State<InputBusPage> {
                 .toList(),
             onChanged: (value) => setState(() => _unitId = value),
           ),
-
           const SizedBox(height: 4),
-
           Row(
             children: [
               Expanded(
@@ -221,8 +188,8 @@ class _InputBusPageState extends State<InputBusPage> {
                   unit != null
                       ? 'Merek: ${unit.brand ?? '-'}'
                       : (_units.isEmpty
-                          ? 'Belum ada unit. Tambahkan dulu.'
-                          : ''),
+                            ? 'Belum ada unit. Tambahkan dulu.'
+                            : ''),
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -236,31 +203,12 @@ class _InputBusPageState extends State<InputBusPage> {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            key: ValueKey('loc-$_locationId'),
-            value: _locationId,
-            isExpanded: true,
-            decoration: _decoration('Lokasi'),
-            items: _locations
-                .map(
-                  (l) => DropdownMenuItem<String>(
-                    value: l.id,
-                    child: Text(l.name),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) => setState(() => _locationId = value),
-          ),
-
-          const SizedBox(height: 16),
-
-          DropdownButtonFormField<String>(
             key: ValueKey('svc-$_serviceId'),
-            value: _serviceId,
+            initialValue: _serviceId,
             isExpanded: true,
-            decoration: _decoration('Jenis Layanan'),
+            decoration: filledInputDecoration('Jenis Layanan'),
             items: _services
                 .map(
                   (s) => DropdownMenuItem<String>(
@@ -271,26 +219,20 @@ class _InputBusPageState extends State<InputBusPage> {
                 .toList(),
             onChanged: (value) => setState(() => _serviceId = value),
           ),
-
           const SizedBox(height: 16),
-
           TextField(
             controller: _note,
             maxLines: 3,
             maxLength: 500,
-            decoration: _decoration('Catatan kondisi awal (opsional)')
-                .copyWith(alignLabelWithHint: true),
+            decoration: filledInputDecoration(
+              'Catatan kondisi awal (opsional)',
+              multiline: true,
+            ),
           ),
-
           const SizedBox(height: 12),
-
           const Row(
             children: [
-              Icon(
-                Icons.schedule,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
+              Icon(Icons.schedule, size: 16, color: AppColors.textSecondary),
               SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -303,9 +245,7 @@ class _InputBusPageState extends State<InputBusPage> {
               ),
             ],
           ),
-
           const SizedBox(height: 24),
-
           SizedBox(
             width: double.infinity,
             child: FilledButton(
@@ -401,9 +341,7 @@ class _NewUnitSheetState extends State<_NewUnitSheet> {
                 'Unit Baru',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-
               const SizedBox(height: 16),
-
               TextField(
                 controller: _plate,
                 textCapitalization: TextCapitalization.characters,
@@ -417,9 +355,7 @@ class _NewUnitSheetState extends State<_NewUnitSheet> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 8),
-
               TextField(
                 controller: _brand,
                 textCapitalization: TextCapitalization.words,
@@ -433,7 +369,6 @@ class _NewUnitSheetState extends State<_NewUnitSheet> {
                   ),
                 ),
               ),
-
               if (_error != null) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -441,9 +376,7 @@ class _NewUnitSheetState extends State<_NewUnitSheet> {
                   style: const TextStyle(color: Colors.red, fontSize: 13),
                 ),
               ],
-
               const SizedBox(height: 16),
-
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(

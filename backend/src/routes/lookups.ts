@@ -1,58 +1,25 @@
 import { Hono } from 'hono'
-import { requireAuth, requireRole } from '../middleware/auth'
-import { apiError } from '../lib/response'
 import { adminClient } from '../lib/supabase'
+import { requireAuth, requireRole } from '../middleware/auth'
+import {
+  listBranches,
+  listPegawai,
+  listServiceTypes,
+} from '../services/lookups.service'
 import type { AppEnv } from '../types'
 
 const lookups = new Hono<AppEnv>()
 
 lookups.get('/branches', async (c) => {
-  const { data, error } = await adminClient(c.env)
-    .from('branches')
-    .select('id, name')
-    .order('name')
-
-  if (error) {
-    console.error(error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil daftar cabang.'), 500)
-  }
-  return c.json({ data })
+  return c.json({ data: await listBranches(adminClient(c.env)) })
 })
-
-
-lookups.get(
-  '/locations',
-  requireAuth,
-  requireRole('owner', 'pengawas'),
-  async (c) => {
-    const { data, error } = await adminClient(c.env)
-      .from('locations')
-      .select('id, name, address')
-      .eq('is_active', true)
-      .order('name')
-    if (error) {
-      console.error(error)
-      return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil data lokasi.'), 500)
-    }
-    return c.json({ data })
-  },
-)
 
 lookups.get(
   '/service-types',
   requireAuth,
   requireRole('owner', 'pengawas'),
   async (c) => {
-    const { data, error } = await adminClient(c.env)
-      .from('service_types')
-      .select('id, name, description')
-      .eq('is_active', true)
-      .order('name')
-    if (error) {
-      console.error(error)
-      return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil jenis layanan.'), 500)
-    }
-    return c.json({ data })
+    return c.json({ data: await listServiceTypes(adminClient(c.env)) })
   },
 )
 
@@ -61,17 +28,7 @@ lookups.get(
   requireAuth,
   requireRole('owner', 'pengawas'),
   async (c) => {
-    const { data, error } = await adminClient(c.env)
-      .from('profiles')
-      .select('id, full_name')
-      .eq('role', 'pegawai')
-      .eq('is_active', true)
-      .order('full_name')
-    if (error) {
-      console.error(error)
-      return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil daftar petugas.'), 500)
-    }
-    return c.json({ data })
+    return c.json({ data: await listPegawai(adminClient(c.env)) })
   },
 )
 

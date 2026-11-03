@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-
+import '../../models/app_user.dart';
+import '../../models/branch.dart';
 import '../../models/stock.dart';
 import '../../services/api_exception.dart';
+import '../../services/auth_service.dart';
+import '../../services/master_service.dart';
 import '../../services/stock_service.dart';
 import '../../theme/app_theme.dart';
-import 'stock_page_support.dart';
+import '../../widgets/branch_filter_chips.dart';
 import 'stock_components.dart';
+import 'stock_page_support.dart';
 import 'stock_sheets.dart';
-
-// 2. HALAMAN UTAMA
 
 class StockPage extends StatefulWidget {
   const StockPage({super.key});
@@ -24,15 +26,15 @@ class _StockPageState extends State<StockPage> {
   int _tab = 0;
   String _selectedCategory = stockCategoryOperational;
   String _searchText = '';
-
-  // Daftar stok
+  List<Branch> _branches = [];
+  int? _branchFilter;
   List<StockItem> _items = [];
   int _changesToday = 0;
   bool _itemsLoading = false;
   bool _itemsLoaded = false;
   String? _itemsError;
+  int _itemsGen = 0;
 
-  // Riwayat
   List<StockMovement> _movements = [];
   bool _movementsLoading = false;
   bool _movementsLoaded = false;
@@ -43,11 +45,13 @@ class _StockPageState extends State<StockPage> {
 
   bool _busy = false;
 
+  bool get _isOwner => AuthService.instance.user?.role == UserRole.owner;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _loadItems();
+      if (mounted) _bootstrap();
     });
   }
 
@@ -57,7 +61,6 @@ class _StockPageState extends State<StockPage> {
     super.dispose();
   }
 
-  /// Tampilkan hanya dua kategori operasional yang dipilih pengguna.
   List<String> get _categories => [
     stockCategoryOperational,
     stockCategoryEquipment,
@@ -85,10 +88,32 @@ class _StockPageState extends State<StockPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  // Muat data
+  Future<void> _bootstrap() async {
+    if (_isOwner && _branchFilter == null) {
+      try {
+        final branches = await MasterService.instance.fetchBranches();
+        if (!mounted) return;
+        setState(() {
+          _branches = branches;
+          _branchFilter = branches.isEmpty ? null : branches.first.id;
+        });
+      } on ApiException catch (e) {
+        if (mounted) setState(() => _itemsError = e.message);
+        return;
+      } catch (_) {
+        if (mounted) {
+          setState(
+            () => _itemsError = 'Terjadi kesalahan saat memuat cabang. Coba lagi.',
+          );
+        }
+        return;
+      }
+    }
+    await _loadItems();
+  }
 
   Future<void> _loadItems() async {
-    if (_itemsLoading) return;
+    final gen = ++_itemsGen;
 
     setState(() {
       _itemsLoading = true;
@@ -96,24 +121,24 @@ class _StockPageState extends State<StockPage> {
     });
 
     try {
-      final result = await _service.fetchItems();
-      if (!mounted) return;
+      final result = await _service.fetchItems(branchId: _branchFilter);
+      if (!mounted || gen != _itemsGen) return;
       setState(() {
         _items = result.items;
         _changesToday = result.changesToday;
         _itemsLoaded = true;
       });
     } on ApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _itemsGen) return;
       setState(() => _itemsError = e.message);
       if (_itemsLoaded) _showMessage(e.message);
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || gen != _itemsGen) return;
       const message = 'Terjadi kesalahan saat memuat stok. Coba lagi.';
       setState(() => _itemsError = message);
       if (_itemsLoaded) _showMessage(message);
     } finally {
-      if (mounted) setState(() => _itemsLoading = false);
+      if (mounted && gen == _itemsGen) setState(() => _itemsLoading = false);
     }
   }
 
@@ -129,6 +154,7 @@ class _StockPageState extends State<StockPage> {
     try {
       final offset = append ? _movements.length : 0;
       final list = await _service.fetchMovements(
+        branchId: _branchFilter,
         from: _range?.start,
         to: _range?.end,
         offset: offset,
@@ -155,6 +181,19 @@ class _StockPageState extends State<StockPage> {
     }
   }
 
+  void _selectBranch(int? id) {
+    if (id == _branchFilter) return;
+    setState(() {
+      _branchFilter = id;
+      _items = [];
+      _itemsLoaded = false;
+      _movements = [];
+      _movementsLoaded = false;
+    });
+    _loadItems();
+    if (_tab == 1) _loadMovements();
+  }
+
   Future<void> _pickRange() async {
     final now = stockNowWib();
     final picked = await showDateRangePicker(
@@ -174,8 +213,6 @@ class _StockPageState extends State<StockPage> {
     setState(() => _range = null);
     await _loadMovements();
   }
-
-  // Aksi
 
   Future<void> _adjustStock(
     StockItem item, {
@@ -219,7 +256,6 @@ class _StockPageState extends State<StockPage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       _showMessage(e.message);
-      // Stok di layar bisa sudah usang (mis. diubah orang lain): muat ulang.
       if (e.statusCode == 409 || e.statusCode == 404) _loadItems();
     } catch (_) {
       if (mounted) _showMessage('Terjadi kesalahan. Coba lagi.');
@@ -249,13 +285,21 @@ class _StockPageState extends State<StockPage> {
   }
 
   Future<void> _openAddItem(String category) async {
+    if (_isOwner && _branchFilter == null) {
+      _showMessage('Pilih cabang dulu untuk menambah barang.');
+      return;
+    }
+
     final result = await showModalBottomSheet<StockChange>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
       shape: stockSheetShape,
-      builder: (_) => AddStockItemSheet(category: category),
+      builder: (_) => AddStockItemSheet(
+        category: category,
+        branchId: _isOwner ? _branchFilter : null,
+      ),
     );
     if (result == null || !mounted) return;
 
@@ -272,8 +316,6 @@ class _StockPageState extends State<StockPage> {
 
     _showMessage('Barang ${result.item.name} berhasil ditambahkan.');
   }
-
-  // ===================== TAMPILAN =====================
 
   @override
   Widget build(BuildContext context) {
@@ -294,8 +336,18 @@ class _StockPageState extends State<StockPage> {
           constraints: const BoxConstraints(maxWidth: 720),
           child: Column(
             children: [
-              if (_busy)
+              if (_busy || (_itemsLoading && _itemsLoaded))
                 const LinearProgressIndicator(minHeight: 2, color: stockRed),
+              if (_isOwner && _branches.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: BranchFilterChips(
+                    branches: _branches,
+                    selectedId: _branchFilter,
+                    onSelected: _selectBranch,
+                    showAll: false,
+                  ),
+                ),
               _buildSummaryRow(),
               _buildTabSwitcher(),
               const SizedBox(height: 8),
@@ -422,12 +474,10 @@ class _StockPageState extends State<StockPage> {
     );
   }
 
-  // Tab 1: Daftar stok
-
   Widget _buildStockTab() {
     if (!_itemsLoaded) {
       if (_itemsError != null) {
-        return StockErrorState(message: _itemsError!, onRetry: _loadItems);
+        return StockErrorState(message: _itemsError!, onRetry: _bootstrap);
       }
       return const Center(child: CircularProgressIndicator(color: stockRed));
     }
@@ -461,36 +511,27 @@ class _StockPageState extends State<StockPage> {
       ],
     );
   }
-
-  /// Tampilkan satu seksi sesuai kategori yang sedang dipilih.
   List<Widget> _buildSections() {
-    final selected = _effectiveCategory;
-    final searching = _searchText.isNotEmpty;
-    final visible = _visibleItems;
+    final category = _effectiveCategory;
+    final items = _visibleItems;
 
-    Widget card(StockItem item) => Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: StockItemCard(item: item, onTap: () => _openItemDetails(item)),
-    );
+    if (items.isEmpty && _searchText.isNotEmpty) return [];
 
-    List<Widget> section(String category) {
-      final isOperational = category == stockCategoryOperational;
-      final items = visible
-          .where(
-            (item) => isOperational
-                ? isOperationalStockCategory(item.category)
-                : !isOperationalStockCategory(item.category),
-          )
-          .toList();
-      if (items.isEmpty && searching) return [];
-
-      return [
-        StockSectionHeader(title: category, count: items.length),
-        if (items.isEmpty) const StockEmptySection() else ...items.map(card),
-      ];
-    }
-
-    return section(selected);
+    return [
+      StockSectionHeader(title: category, count: items.length),
+      if (items.isEmpty)
+        const StockEmptySection()
+      else
+        ...items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: StockItemCard(
+              item: item,
+              onTap: () => _openItemDetails(item),
+            ),
+          ),
+        ),
+    ];
   }
 
   Widget _buildSearchField() {
@@ -532,8 +573,6 @@ class _StockPageState extends State<StockPage> {
       ),
     );
   }
-
-  // Tab 2: Riwayat
 
   Widget _buildHistoryTab() {
     return Column(
@@ -731,5 +770,3 @@ class _StockPageState extends State<StockPage> {
     );
   }
 }
-
-// 3. TAMPILAN KOSONG DAN ERROR

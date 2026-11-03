@@ -1,18 +1,27 @@
 import { Hono, type Context } from 'hono'
-import { requireAuth, requireRole } from '../middleware/auth'
-import { apiError } from '../lib/response'
+import { requireUuid } from '../lib/http'
 import { adminClient } from '../lib/supabase'
 import {
   intQuery,
   isoDateTime,
+  optionalBranchId,
   optionalUuid,
   readJson,
   requiredUuid,
-  safeLike,
   text,
-  uuidPattern,
   ValidationError,
 } from '../lib/validate'
+import { requireAuth, requireRole } from '../middleware/auth'
+import {
+  assignJob,
+  createJob,
+  getJob,
+  JOB_STATUSES,
+  jobNotFound,
+  jobRecap,
+  listJobs,
+  type JobFilters,
+} from '../services/jobs.service'
 import type { AppEnv } from '../types'
 import work from './work'
 
@@ -20,30 +29,9 @@ const jobs = new Hono<AppEnv>()
 
 jobs.use('*', requireAuth)
 
-const JOB_STATUSES = [
-  'terdaftar',
-  'menunggu_dikerjakan',
-  'dalam_pengerjaan',
-  'menunggu_pemeriksaan',
-  'selesai',
-  'unit_keluar',
-]
-
 const MAX_ASSIGNEES = 20
 
-type Filters = {
-  statuses: string[]
-  locationId?: string
-  serviceTypeId?: string
-  pegawaiId?: string
-  unitId?: string
-  from?: string
-  to?: string
-  q?: string
-}
-
-// Filter yang sama dipakai daftar riwayat dan rekap.
-function parseFilters(c: Context<AppEnv>): Filters {
+function parseFilters(c: Context<AppEnv>): JobFilters {
   const statusParam = c.req.query('status')
   const statuses = statusParam
     ? statusParam.split(',').map((s) => s.trim()).filter(Boolean)
@@ -54,7 +42,7 @@ function parseFilters(c: Context<AppEnv>): Filters {
 
   return {
     statuses,
-    locationId: optionalUuid(c.req.query('location_id'), 'Lokasi'),
+    branchId: optionalBranchId(c.req.query('branch_id')),
     serviceTypeId: optionalUuid(c.req.query('service_type_id'), 'Jenis layanan'),
     pegawaiId: optionalUuid(c.req.query('pegawai_id'), 'Petugas'),
     unitId: optionalUuid(c.req.query('unit_id'), 'Unit'),
@@ -80,268 +68,59 @@ function uuidList(v: unknown, label: string, min: number, max: number): string[]
 
 jobs.post('/', requireRole('pengawas'), async (c) => {
   const raw = await readJson(c)
-  const unitId = requiredUuid(raw.unit_id, 'Unit')
-  const locationId = requiredUuid(raw.location_id, 'Lokasi')
-  const serviceTypeId = requiredUuid(raw.service_type_id, 'Jenis layanan')
-  const enteredAt = isoDateTime(raw.entered_at, 'waktu masuk')
-  const notes = text(raw.initial_condition_notes, 'Catatan kondisi awal', {
-    max: 500,
-  })
 
+  const enteredAt = isoDateTime(raw.entered_at, 'waktu masuk')
   if (enteredAt && Date.parse(enteredAt) > Date.now() + 5 * 60 * 1000) {
     throw new ValidationError('Waktu masuk tidak boleh di masa depan.')
   }
 
-  const user = c.get('user')
-  const db = adminClient(c.env)
+  const job = await createJob(adminClient(c.env), c.get('user'), {
+    unitId: requiredUuid(raw.unit_id, 'Unit'),
+    serviceTypeId: requiredUuid(raw.service_type_id, 'Jenis layanan'),
+    enteredAt,
+    notes: text(raw.initial_condition_notes, 'Catatan kondisi awal', { max: 500 }) ?? null,
+  })
 
-  const [unitRes, locRes, svcRes, activeRes] = await Promise.all([
-    db.from('units').select('id, is_active').eq('id', unitId).maybeSingle(),
-    db.from('locations').select('id, is_active').eq('id', locationId).maybeSingle(),
-    db.from('service_types').select('id, is_active').eq('id', serviceTypeId).maybeSingle(),
-    db
-      .from('wash_jobs')
-      .select('id, job_code')
-      .eq('unit_id', unitId)
-      .neq('status', 'unit_keluar')
-      .limit(1)
-      .maybeSingle(),
-  ])
-
-  const failed = unitRes.error ?? locRes.error ?? svcRes.error ?? activeRes.error
-  if (failed) {
-    console.error(failed)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal memvalidasi data.'), 500)
-  }
-  if (!unitRes.data?.is_active) {
-    throw new ValidationError('Unit tidak ditemukan atau nonaktif.')
-  }
-  if (!locRes.data?.is_active) {
-    throw new ValidationError('Lokasi tidak ditemukan atau nonaktif.')
-  }
-  if (!svcRes.data?.is_active) {
-    throw new ValidationError('Jenis layanan tidak ditemukan atau nonaktif.')
-  }
-  if (activeRes.data) {
-    return c.json(
-      apiError(
-        'ACTIVE_JOB_EXISTS',
-        `Unit ini masih punya pekerjaan aktif (${activeRes.data.job_code}).`,
-      ),
-      409,
-    )
-  }
-
-  const { data: row, error } = await db
-    .from('wash_jobs')
-    .insert({
-      unit_id: unitId,
-      location_id: locationId,
-      service_type_id: serviceTypeId,
-      ...(enteredAt ? { entered_at: enteredAt } : {}),
-      initial_condition_notes: notes ?? null,
-      created_by: user.id,
-    })
-    .select()
-    .single()
-
-  if (error) {
-    if (error.code === 'P0001') {
-      return c.json(apiError('CONFLICT', error.message), 409)
-    }
-    console.error(error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal menyimpan data bus.'), 500)
-  }
-
-  const { data: detail } = await db
-    .from('v_job_detail')
-    .select('*')
-    .eq('id', row.id)
-    .maybeSingle()
-
-  return c.json({ message: 'Bus berhasil dicatat.', job: detail ?? row }, 201)
+  return c.json({ message: 'Bus berhasil dicatat.', job }, 201)
 })
 
 jobs.get('/', async (c) => {
-  const f = parseFilters(c)
+  const filters = parseFilters(c)
   const limit = intQuery(c.req.query('limit'), 'Limit', 50, 1, 100)
   const offset = intQuery(c.req.query('offset'), 'Offset', 0, 0, 1_000_000)
 
-  const user = c.get('user')
-  const db = adminClient(c.env)
-
-  let req = db
-    .from('v_job_detail')
-    .select('*')
-    .order('entered_at', { ascending: false })
-    .order('id', { ascending: false })
-    .range(offset, offset + limit - 1)
-
-  // Petugas selalu dibatasi ke tugas miliknya sendiri, apa pun parameter yang dikirim.
-  const scopePegawaiId = user.role === 'pegawai' ? user.id : f.pegawaiId
-  if (scopePegawaiId) req = req.contains('pegawai_ids', [scopePegawaiId])
-
-  if (f.statuses.length) req = req.in('status', f.statuses)
-  if (f.locationId) req = req.eq('location_id', f.locationId)
-  if (f.serviceTypeId) req = req.eq('service_type_id', f.serviceTypeId)
-  if (f.unitId) req = req.eq('unit_id', f.unitId)
-  if (f.from) req = req.gte('entered_at', f.from)
-  if (f.to) req = req.lte('entered_at', f.to)
-  if (f.q) req = req.ilike('plate_number', `%${safeLike(f.q)}%`)
-
-  const { data, error } = await req
-  if (error) {
-    console.error(error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil data pekerjaan.'), 500)
-  }
+  const data = await listJobs(adminClient(c.env), c.get('user'), filters, limit, offset)
   return c.json({ data, limit, offset })
 })
 
-// Harus didaftarkan sebelum '/:id' supaya 'recap' tidak dianggap sebagai id.
 jobs.get('/recap', requireRole('owner', 'pengawas'), async (c) => {
-  const f = parseFilters(c)
-  const plate = f.q ? safeLike(f.q) : ''
-
-  const { data, error } = await adminClient(c.env).rpc('job_recap', {
-    p_from: f.from ?? null,
-    p_to: f.to ?? null,
-    p_location_id: f.locationId ?? null,
-    p_service_type_id: f.serviceTypeId ?? null,
-    p_pegawai_id: f.pegawaiId ?? null,
-    p_unit_id: f.unitId ?? null,
-    p_plate: plate || null,
-    p_statuses: f.statuses.length ? f.statuses : null,
-  })
-
-  if (error) {
-    console.error(error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil rekap.'), 500)
-  }
-  return c.json({ recap: data })
+  const recap = await jobRecap(adminClient(c.env), c.get('user'), parseFilters(c))
+  return c.json({ recap })
 })
 
 jobs.get('/:id', async (c) => {
-  const id = c.req.param('id')
-  const notFound = () =>
-    c.json(apiError('NOT_FOUND', 'Pekerjaan tidak ditemukan.'), 404)
-  if (!uuidPattern.test(id)) return notFound()
-
-  const user = c.get('user')
-  const db = adminClient(c.env)
-
-  if (user.role === 'pegawai') {
-    const { data: link } = await db
-      .from('job_assignees')
-      .select('job_id')
-      .eq('job_id', id)
-      .eq('pegawai_id', user.id)
-      .maybeSingle()
-    if (!link) return notFound()
-  }
-
-  const [jobRes, linkRes] = await Promise.all([
-    db.from('v_job_detail').select('*').eq('id', id).maybeSingle(),
-    db.from('job_assignees').select('pegawai_id').eq('job_id', id),
-  ])
-
-  if (jobRes.error || linkRes.error) {
-    console.error(jobRes.error ?? linkRes.error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal mengambil detail pekerjaan.'), 500)
-  }
-  if (!jobRes.data) return notFound()
-
-  return c.json({
-    job: jobRes.data,
-    pegawai_ids: (linkRes.data ?? []).map(
-      (r: { pegawai_id: string }) => r.pegawai_id,
-    ),
-  })
+  const id = requireUuid(c.req.param('id'), jobNotFound)
+  return c.json(await getJob(adminClient(c.env), c.get('user'), id))
 })
 
 jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
-  const id = c.req.param('id')
-  const notFound = () =>
-    c.json(apiError('NOT_FOUND', 'Pekerjaan tidak ditemukan.'), 404)
-  if (!uuidPattern.test(id)) return notFound()
-
+  const id = requireUuid(c.req.param('id'), jobNotFound)
   const raw = await readJson(c)
+
   const pegawaiIds = uuidList(raw.pegawai_ids, 'Petugas', 1, MAX_ASSIGNEES)
 
-  // undefined  -> pertahankan instruksi lama (null ke assign_job)
-  // null / ''  -> hapus instruksi (kirim string kosong, karena assign_job pakai coalesce)
   const instructions =
     raw.instructions === undefined
       ? null
       : (text(raw.instructions, 'Instruksi', { max: 255 }) ?? '')
 
-  const user = c.get('user')
-  const db = adminClient(c.env)
-
-  const [jobRes, pegawaiRes] = await Promise.all([
-    db.from('wash_jobs').select('id, status').eq('id', id).maybeSingle(),
-    db
-      .from('profiles')
-      .select('id')
-      .eq('role', 'pegawai')
-      .eq('is_active', true)
-      .in('id', pegawaiIds),
-  ])
-
-  const failed = jobRes.error ?? pegawaiRes.error
-  if (failed) {
-    console.error(failed)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal memvalidasi data.'), 500)
-  }
-  if (!jobRes.data) return notFound()
-
-  if ((pegawaiRes.data ?? []).length !== pegawaiIds.length) {
-    throw new ValidationError('Terdapat petugas yang tidak valid atau tidak aktif.')
-  }
-
-  if (!['terdaftar', 'menunggu_dikerjakan'].includes(jobRes.data.status)) {
-    return c.json(
-      apiError(
-        'CONFLICT',
-        'Penugasan tidak dapat diubah setelah pengerjaan dimulai.',
-      ),
-      409,
-    )
-  }
-
-  const { error } = await db.rpc('assign_job', {
-    p_job_id: id,
-    p_pegawai_ids: pegawaiIds,
-    p_team_id: null,
-    p_instructions: instructions,
-    p_assigned_by: user.id,
+  const job = await assignJob(adminClient(c.env), c.get('user'), id, {
+    pegawaiIds,
+    instructions,
   })
-
-  if (error) {
-    if (error.code === 'P0001') {
-      return c.json(apiError('CONFLICT', error.message), 409)
-    }
-    console.error(error)
-    return c.json(apiError('INTERNAL_ERROR', 'Gagal menyimpan penugasan.'), 500)
-  }
-
-  const { data: detail, error: detailError } = await db
-    .from('v_job_detail')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (detailError || !detail) {
-    console.error(detailError)
-    return c.json(
-      apiError('INTERNAL_ERROR', 'Penugasan tersimpan, tetapi gagal memuat data terbaru.'),
-      500,
-    )
-  }
-
-  return c.json({ message: 'Penugasan berhasil disimpan.', job: detail })
+  return c.json({ message: 'Penugasan berhasil disimpan.', job })
 })
 
-// Mulai/selesai cuci, checklist, foto, pemeriksaan, unit keluar (auth sudah dipasang di atas)
 jobs.route('/', work)
 
 export default jobs

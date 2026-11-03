@@ -29,22 +29,25 @@ const List<String> _months = [
 ];
 
 String formatDay(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
-
-// Batas hari dalam WIB (UTC+7), dikirim ke server sebagai waktu UTC.
 DateTime _dayStartUtc(DateTime wibDay) =>
-    DateTime.utc(wibDay.year, wibDay.month, wibDay.day)
-        .subtract(const Duration(hours: 7));
+    DateTime.utc(
+      wibDay.year,
+      wibDay.month,
+      wibDay.day,
+    ).subtract(const Duration(hours: 7));
 
-DateTime _dayEndUtc(DateTime wibDay) =>
-    DateTime.utc(wibDay.year, wibDay.month, wibDay.day + 1)
-        .subtract(const Duration(hours: 7, milliseconds: 1));
+DateTime _dayEndUtc(DateTime wibDay) => DateTime.utc(
+  wibDay.year,
+  wibDay.month,
+  wibDay.day + 1,
+).subtract(const Duration(hours: 7, milliseconds: 1));
 
 class HistoryFilter {
   final DatePreset preset;
   final DateTime? customFrom;
   final DateTime? customTo;
   final Set<WashStatus> statuses;
-  final String? locationId;
+  final int? branchId;
   final String? serviceTypeId;
   final String? pegawaiId;
   final String? unitId;
@@ -55,7 +58,7 @@ class HistoryFilter {
     this.customFrom,
     this.customTo,
     this.statuses = const {},
-    this.locationId,
+    this.branchId,
     this.serviceTypeId,
     this.pegawaiId,
     this.unitId,
@@ -68,7 +71,7 @@ class HistoryFilter {
       customFrom: customFrom,
       customTo: customTo,
       statuses: statuses,
-      locationId: locationId,
+      branchId: branchId,
       serviceTypeId: serviceTypeId,
       pegawaiId: pegawaiId,
       unitId: unitId,
@@ -76,11 +79,10 @@ class HistoryFilter {
     );
   }
 
-  /// Filter di panel (tanpa kolom pencarian dan unit) sedang dipakai.
   bool get isActive =>
       preset != DatePreset.all ||
       statuses.isNotEmpty ||
-      locationId != null ||
+      branchId != null ||
       serviceTypeId != null ||
       pegawaiId != null;
 
@@ -121,7 +123,7 @@ class HistoryFilter {
       if (limit != null) 'limit': limit,
       if (offset != null) 'offset': offset,
       if (statusList.isNotEmpty) 'status': statusList.join(','),
-      if (locationId != null) 'location_id': locationId,
+      if (branchId != null) 'branch_id': branchId,
       if (serviceTypeId != null) 'service_type_id': serviceTypeId,
       if (pegawaiId != null) 'pegawai_id': pegawaiId,
       if (unitId != null) 'unit_id': unitId,

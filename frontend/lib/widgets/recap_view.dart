@@ -4,6 +4,7 @@ import '../models/recap.dart';
 import '../services/api_exception.dart';
 import '../services/history_service.dart';
 import '../theme/app_theme.dart';
+import 'error_state.dart';
 import 'stat_card.dart';
 
 String formatMinutes(double? minutes) {
@@ -16,7 +17,6 @@ String formatMinutes(double? minutes) {
   return h > 0 ? '$h j $m m' : '$m m';
 }
 
-/// Rekap operasional untuk filter yang sedang dipilih.
 class RecapView extends StatefulWidget {
   final HistoryFilter filter;
 
@@ -91,27 +91,9 @@ class _RecapViewState extends State<RecapView>
     final recap = _recap;
 
     if (_error != null || recap == null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, size: 40, color: Colors.grey),
-              const SizedBox(height: 12),
-              Text(
-                _error ?? 'Gagal memuat rekap.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: _load,
-                child: const Text('Coba lagi'),
-              ),
-            ],
-          ),
-        ),
+      return ErrorState(
+        message: _error ?? 'Gagal memuat rekap.',
+        onRetry: _load,
       );
     }
 
@@ -147,7 +129,7 @@ class _RecapViewState extends State<RecapView>
               ),
             )
           else ...[
-            _Section(title: 'Per Lokasi', rows: recap.byLocation),
+            _Section(title: 'Per Cabang', rows: recap.byBranch),
             _Section(
               title: 'Per Petugas',
               rows: recap.byPegawai,

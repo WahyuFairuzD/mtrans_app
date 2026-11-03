@@ -1,23 +1,20 @@
 import 'package:flutter/material.dart';
-import '../attendance/attendance_page.dart';
-import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
-import '../../services/review_service.dart';
-import '../stock/stock_page.dart';
-import '../../theme/app_theme.dart';
 import '../../services/app_data.dart';
-import '../../widgets/attendance_widgets.dart';
+import '../../services/review_service.dart';
+import '../../utils/dialogs.dart';
 import '../../widgets/bus_card.dart';
+import '../../widgets/dashboard_scaffold.dart';
+import '../../widgets/entry_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
-import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
+import '../attendance/attendance_page.dart';
+import '../stock/stock_page.dart';
 import 'assign_page.dart';
 import 'input_bus_page.dart';
 import 'inspection_page.dart';
-
-const _logoAsset = 'assets/images/kpbputih.png';
 
 class PengawasDashboard extends StatefulWidget {
   const PengawasDashboard({super.key});
@@ -35,36 +32,16 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
   void initState() {
     super.initState();
 
-    _appData.addListener(_onDataChanged);
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _appData.refresh();
     });
   }
 
-  @override
-  void dispose() {
-    _appData.removeListener(_onDataChanged);
+  List<BusWash> _by(WashStatus status) =>
+      _appData.operational.where((bus) => bus.status == status).toList();
 
-    super.dispose();
-  }
-
-  void _onDataChanged() {
-    if (!mounted) return;
-
-    setState(() {});
-  }
-
-  List<BusWash> _by(List<WashStatus> statuses) {
-    return _appData.operational
-        .where((bus) => statuses.contains(bus.status))
-        .toList();
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  void _open(Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
 
   Future<void> _addBus() async {
@@ -87,8 +64,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     if (result == null || !mounted) return;
 
     _appData.addBus(result);
-
-    _showMessage('Penugasan berhasil disimpan.');
+    showSnack(context, 'Penugasan berhasil disimpan.');
   }
 
   Future<void> _inspect(BusWash bus) async {
@@ -100,34 +76,19 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     if (result == null || !mounted) return;
 
     _appData.addBus(result);
-
-    _showMessage('Hasil pemeriksaan tersimpan. Bus siap dicatat keluar.');
+    showSnack(context, 'Hasil pemeriksaan tersimpan. Bus siap dicatat keluar.');
   }
 
   Future<void> _recordExit(BusWash bus) async {
     if (_busy) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Catat ${bus.plateNumber} keluar?'),
-        content: const Text(
-          'Waktu keluar dicatat sekarang dan pekerjaan masuk ke rekap.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Catat Keluar'),
-          ),
-        ],
-      ),
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Catat ${bus.plateNumber} keluar?',
+      message: 'Waktu keluar dicatat sekarang dan pekerjaan masuk ke rekap.',
+      confirmLabel: 'Catat Keluar',
     );
-
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _busy = true);
 
@@ -137,11 +98,11 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
       updated = await ReviewService.instance.recordExit(bus.id);
     } on ApiException catch (e) {
       if (mounted) {
-        _showMessage(e.message);
+        showSnack(context, e.message);
         if (e.statusCode == 409) _appData.refresh();
       }
     } catch (_) {
-      if (mounted) _showMessage('Terjadi kesalahan. Coba lagi.');
+      if (mounted) showSnack(context, 'Terjadi kesalahan. Coba lagi.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -149,8 +110,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     if (updated == null || !mounted) return;
 
     _appData.addBus(updated);
-
-    _showMessage('Unit keluar dicatat.');
+    showSnack(context, 'Unit keluar dicatat.');
   }
 
   List<Widget> _section(
@@ -183,253 +143,115 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
+    return ListenableBuilder(
+      listenable: _appData,
+      builder: (context, _) {
+        final toAssign = _by(WashStatus.terdaftar);
+        final waiting = _by(WashStatus.menungguDikerjakan);
+        final working = _by(WashStatus.dalamPengerjaan);
+        final toInspect = _by(WashStatus.menungguPemeriksaan);
+        final toExit = _by(WashStatus.selesai);
 
-    final toAssign = _by([WashStatus.terdaftar]);
-    final waiting = _by([WashStatus.menungguDikerjakan]);
-    final working = _by([WashStatus.dalamPengerjaan]);
-    final runningCount = waiting.length + working.length;
+        final isEmpty =
+            _appData.loaded &&
+            _appData.error == null &&
+            _appData.operational.isEmpty;
 
-    final toInspect = _by([WashStatus.menungguPemeriksaan]);
-
-    final toExit = _by([WashStatus.selesai]);
-
-    final isEmpty =
-        _appData.loaded &&
-        _appData.error == null &&
-        _appData.operational.isEmpty;
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        body: RefreshIndicator(
+        return DashboardScaffold(
+          greeting: 'Halo, Pengawas',
+          subtitle: 'Kelola bus masuk, penugasan, dan pemeriksaan.',
           onRefresh: _appData.refresh,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Stack(
-              children: [
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: top + 190,
-                  child: Container(
-                    color: AppColors.brand,
-                    padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
-                    child: Stack(
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const ProfileButton(),
-                            const Spacer(),
-                            Image.asset(
-                              _logoAsset,
-                              height: 120,
-                              fit: BoxFit.contain,
-                            ),
-                          ],
-                        ),
-                        const Positioned(
-                          left: 0,
-                          bottom: 50,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Halo, Pengawas',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'Kelola bus masuk, penugasan, dan pemeriksaan.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          bottomPadding: 96,
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _addBus,
+            icon: const Icon(Icons.add),
+            label: const Text('Input Bus Datang'),
+          ),
+          children: [
+            StatGrid(
+              items: [
+                StatCard(
+                  number: '${toAssign.length}',
+                  title: 'Perlu Ditugaskan',
+                  icon: Icons.assignment_ind_outlined,
+                  color: Colors.blueGrey,
                 ),
-
-                Padding(
-                  padding: EdgeInsets.fromLTRB(20, top + 150, 20, 96),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      StatGrid(
-                        items: [
-                          StatCard(
-                            number: '${toAssign.length}',
-                            title: 'Perlu Ditugaskan',
-                            icon: Icons.assignment_ind_outlined,
-                            color: Colors.blueGrey,
-                          ),
-                          StatCard(
-                            number: '$runningCount',
-                            title: 'Berjalan',
-                            icon: Icons.autorenew,
-                            color: Colors.orange,
-                          ),
-                          StatCard(
-                            number: '${toInspect.length}',
-                            title: 'Perlu Diperiksa',
-                            icon: Icons.fact_check_outlined,
-                            color: Colors.purple,
-                          ),
-                          StatCard(
-                            number: '${toExit.length}',
-                            title: 'Siap Keluar',
-                            icon: Icons.exit_to_app,
-                            color: Colors.green,
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 14),
-                      AttendanceEntryCard(
-                        title: 'Absensi',
-                        subtitle: 'Catat absen masuk dan pulang',
-                        icon: Icons.fact_check_outlined,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AttendancePage(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _StockEntry(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const StockPage()),
-                        ),
-                      ),
-
-                      LoadNotice(
-                        loading: _appData.loading,
-                        loaded: _appData.loaded,
-                        error: _appData.error,
-                        onRetry: _appData.refresh,
-                      ),
-
-                      if (isEmpty) ...[
-                        const SizedBox(height: 24),
-                        const Center(
-                          child: Text(
-                            'Belum ada bus. Tekan "Input Bus Datang" untuk mencatat bus yang datang.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                      ],
-
-                      ..._section(
-                        'Perlu Ditugaskan',
-                        toAssign,
-                        'Tugaskan Petugas',
-                        _assign,
-                      ),
-
-                      ..._section(
-                        'Menunggu Dikerjakan',
-                        waiting,
-                        'Ganti Petugas',
-                        _assign,
-                      ),
-
-                      ..._section('Sedang Dikerjakan', working),
-
-                      ..._section(
-                        'Menunggu Pemeriksaan',
-                        toInspect,
-                        'Periksa Hasil',
-                        _inspect,
-                      ),
-
-                      ..._section(
-                        'Siap Keluar',
-                        toExit,
-                        'Catat Bus Keluar',
-                        _recordExit,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      const HistoryButton(),
-                    ],
-                  ),
+                StatCard(
+                  number: '${waiting.length + working.length}',
+                  title: 'Berjalan',
+                  icon: Icons.autorenew,
+                  color: Colors.orange,
+                ),
+                StatCard(
+                  number: '${toInspect.length}',
+                  title: 'Perlu Diperiksa',
+                  icon: Icons.fact_check_outlined,
+                  color: Colors.purple,
+                ),
+                StatCard(
+                  number: '${toExit.length}',
+                  title: 'Siap Keluar',
+                  icon: Icons.exit_to_app,
+                  color: Colors.green,
                 ),
               ],
             ),
-          ),
-        ),
-
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _addBus,
-          icon: const Icon(Icons.add),
-          label: const Text('Input Bus Datang'),
-        ),
-      ),
+            const SizedBox(height: 14),
+            EntryCard(
+              title: 'Absensi',
+              subtitle: 'Catat absen masuk dan pulang',
+              icon: Icons.fact_check_outlined,
+              onTap: () => _open(const AttendancePage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Kelola Stok',
+              subtitle: 'Lihat persediaan dan catat perubahan',
+              icon: Icons.inventory_2_outlined,
+              iconColor: Colors.blue,
+              onTap: () => _open(const StockPage()),
+            ),
+            LoadNotice(
+              loading: _appData.loading,
+              loaded: _appData.loaded,
+              error: _appData.error,
+              onRetry: _appData.refresh,
+            ),
+            if (isEmpty) ...[
+              const SizedBox(height: 24),
+              const Center(
+                child: Text(
+                  'Belum ada bus. Tekan "Input Bus Datang" untuk mencatat bus yang datang.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+            ..._section(
+              'Perlu Ditugaskan',
+              toAssign,
+              'Tugaskan Petugas',
+              _assign,
+            ),
+            ..._section(
+              'Menunggu Dikerjakan',
+              waiting,
+              'Ganti Petugas',
+              _assign,
+            ),
+            ..._section('Sedang Dikerjakan', working),
+            ..._section(
+              'Menunggu Pemeriksaan',
+              toInspect,
+              'Periksa Hasil',
+              _inspect,
+            ),
+            ..._section('Siap Keluar', toExit, 'Catat Bus Keluar', _recordExit),
+            const SizedBox(height: 24),
+            const HistoryButton(),
+          ],
+        );
+      },
     );
   }
-}
-
-class _StockEntry extends StatelessWidget {
-  const _StockEntry({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: Color(0xFFEAF2FF),
-              child: Icon(Icons.inventory_2_outlined, color: Colors.blue),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Kelola Stok',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Lihat persediaan dan catat perubahan',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
-      ),
-    ),
-  );
 }

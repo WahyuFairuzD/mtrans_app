@@ -4,7 +4,9 @@ import '../../models/inspection.dart';
 import '../../services/api_exception.dart';
 import '../../services/review_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/job_media.dart';
+import '../../utils/dialogs.dart';
+import '../../widgets/bus_header_card.dart';
+import '../../widgets/job_checklist_section.dart';
 
 class InspectionPage extends StatefulWidget {
   final BusWash bus;
@@ -29,37 +31,18 @@ class _InspectionPageState extends State<InspectionPage> {
     super.dispose();
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
-
   Future<void> _save() async {
     final result = _result;
     if (result == null || _saving) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Simpan hasil pemeriksaan?'),
-        content: Text(
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Simpan hasil pemeriksaan?',
+      message:
           'Hasil: ${result.label}. Status pekerjaan berubah menjadi Selesai dan hasil tidak bisa diubah lagi.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Simpan',
     );
-
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _saving = true);
 
@@ -73,9 +56,9 @@ class _InspectionPageState extends State<InspectionPage> {
       if (!mounted) return;
       Navigator.pop<BusWash>(context, bus);
     } on ApiException catch (e) {
-      if (mounted) _showError(e.message);
+      if (mounted) showSnack(context, e.message);
     } catch (_) {
-      if (mounted) _showError('Terjadi kesalahan. Coba lagi.');
+      if (mounted) showSnack(context, 'Terjadi kesalahan. Coba lagi.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -83,6 +66,8 @@ class _InspectionPageState extends State<InspectionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bus = widget.bus;
+
     return PopScope(
       canPop: !_saving,
       child: Scaffold(
@@ -90,17 +75,22 @@ class _InspectionPageState extends State<InspectionPage> {
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            _buildHeader(),
-
-            JobProofSection(jobId: widget.bus.id),
-
+            BusHeaderCard(
+              bus: bus,
+              extraLines: [
+                if (bus.employees.isNotEmpty)
+                  'Petugas: ${bus.employees.map((e) => e.name).join(', ')}',
+                if (bus.startTime != null || bus.endTime != null)
+                  'Mulai ${bus.startTime ?? '-'} • Selesai ${bus.endTime ?? '-'}',
+              ],
+            ),
+            JobChecklistSection(jobId: bus.id),
             const SizedBox(height: 24),
             const Text(
               'Hasil Pemeriksaan',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-
             ...InspectionResult.values.map(
               (option) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -111,27 +101,18 @@ class _InspectionPageState extends State<InspectionPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 8),
-
             TextField(
               controller: _notes,
               maxLines: 3,
               maxLength: 500,
               enabled: !_saving,
-              decoration: InputDecoration(
-                labelText: 'Catatan pemeriksaan (opsional)',
-                alignLabelWithHint: true,
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              decoration: filledInputDecoration(
+                'Catatan pemeriksaan (opsional)',
+                multiline: true,
               ),
             ),
-
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: FilledButton(
@@ -153,78 +134,6 @@ class _InspectionPageState extends State<InspectionPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    final bus = widget.bus;
-
-    final subtitle = [
-      bus.brand,
-      if (bus.serviceName != null) bus.serviceName!,
-    ].join(' • ');
-
-    final lines = <String>[
-      if (bus.employees.isNotEmpty)
-        'Petugas: ${bus.employees.map((e) => e.name).join(', ')}',
-      if (bus.startTime != null || bus.endTime != null)
-        'Mulai ${bus.startTime ?? '-'} • Selesai ${bus.endTime ?? '-'}',
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 45,
-            height: 45,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.directions_bus, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  bus.plateNumber,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                for (final line in lines) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    line,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

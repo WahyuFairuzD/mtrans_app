@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { HTTPException } from 'hono/http-exception'
+import { AppError } from './lib/errors'
 import { apiError } from './lib/response'
 import { ValidationError } from './lib/validate'
-import auth from './routes/auth'
 import attendance from './routes/attendance'
+import auth from './routes/auth'
 import jobs from './routes/jobs'
 import lookups from './routes/lookups'
 import stock from './routes/stock'
@@ -34,7 +35,11 @@ app.route('/', lookups)
 
 app.notFound((c) => c.json(apiError('NOT_FOUND', 'Endpoint tidak ditemukan.'), 404))
 
+// Semua kegagalan dari route dan service berakhir di sini.
 app.onError((err, c) => {
+  if (err instanceof AppError) {
+    return c.json(apiError(err.code, err.message), err.status)
+  }
   if (err instanceof ValidationError) {
     return c.json(apiError('VALIDATION_ERROR', err.message), 400)
   }

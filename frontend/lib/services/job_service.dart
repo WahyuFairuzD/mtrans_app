@@ -26,7 +26,6 @@ class JobService {
 
   Future<BusWash> createJob({
     required String unitId,
-    required String locationId,
     required String serviceTypeId,
     String? initialNote,
   }) async {
@@ -35,7 +34,6 @@ class JobService {
         '/jobs',
         data: {
           'unit_id': unitId,
-          'location_id': locationId,
           'service_type_id': serviceTypeId,
           if (initialNote != null && initialNote.isNotEmpty)
             'initial_condition_notes': initialNote,
@@ -72,10 +70,7 @@ class JobService {
     try {
       final res = await _dio.post(
         '/jobs/$jobId/assign',
-        data: {
-          'pegawai_ids': pegawaiIds,
-          'instructions': instructions,
-        },
+        data: {'pegawai_ids': pegawaiIds, 'instructions': instructions},
       );
       final body = res.data as Map<String, dynamic>;
       return BusWash.fromJson(body['job'] as Map<String, dynamic>);

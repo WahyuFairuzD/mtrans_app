@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../models/branch.dart';
 import '../theme/app_theme.dart';
 
@@ -9,20 +8,24 @@ class BranchFilterChips extends StatelessWidget {
     required this.branches,
     required this.selectedId,
     required this.onSelected,
+    this.showAll = true,
+    this.padding = const EdgeInsets.symmetric(horizontal: 16),
   });
 
   final List<Branch> branches;
   final int? selectedId;
   final ValueChanged<int?> onSelected;
+  final bool showAll;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) => SizedBox(
     height: 48,
     child: ListView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: padding,
       children: [
-        _chip('Semua', null),
+        if (showAll) _chip('Semua', null),
         ...branches.map((branch) => _chip(branch.name, branch.id)),
       ],
     ),

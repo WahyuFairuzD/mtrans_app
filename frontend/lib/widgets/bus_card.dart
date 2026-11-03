@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import '../models/bus_wash.dart';
 import '../theme/app_theme.dart';
-import 'job_media.dart';
+import 'bus_header_card.dart';
+import 'job_checklist_section.dart';
 
-bool _hasPhotos(BusWash bus) =>
-    bus.status.index >= WashStatus.menungguPemeriksaan.index;
-bool _hasProof(BusWash bus) =>
+bool _hasChecklist(BusWash bus) =>
     bus.status.index >= WashStatus.dalamPengerjaan.index;
+
+bool _checklistDone(BusWash bus) =>
+    bus.status.index >= WashStatus.menungguPemeriksaan.index;
 
 class BusCard extends StatelessWidget {
   final BusWash bus;
   final bool showDate;
+  final bool showBranch;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -18,23 +21,25 @@ class BusCard extends StatelessWidget {
     super.key,
     required this.bus,
     this.showDate = false,
+    this.showBranch = false,
     this.actionLabel,
     this.onAction,
   });
 
-  String get _subtitle {
-    final base = bus.brand;
-    return showDate ? '${bus.date} • $base' : base;
-  }
+  String get _subtitle => [
+    if (showDate) bus.date,
+    bus.brand,
+    if (showBranch && bus.branchName != null) bus.branchName!,
+  ].join(' • ');
 
   @override
   Widget build(BuildContext context) {
-    final photos = _hasPhotos(bus);
-    final hint = photos
-        ? 'Lihat foto & checklist'
+    final checklistDone = _checklistDone(bus);
+    final hint = checklistDone
+        ? 'Lihat checklist'
         : (bus.employees.isNotEmpty
-            ? bus.employees.map((e) => e.name).join(', ')
-            : null);
+              ? bus.employees.map((e) => e.name).join(', ')
+              : null);
 
     return Material(
       color: Colors.white,
@@ -53,18 +58,7 @@ class BusCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 45,
-                    height: 45,
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.directions_bus,
-                      color: Colors.white,
-                    ),
-                  ),
+                  const BusIconBadge(),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -92,8 +86,8 @@ class BusCard extends StatelessWidget {
                           Row(
                             children: [
                               Icon(
-                                photos
-                                    ? Icons.photo_outlined
+                                checklistDone
+                                    ? Icons.checklist
                                     : Icons.person_outline,
                                 size: 14,
                                 color: AppColors.textSecondary,
@@ -165,93 +159,6 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class ChecklistList extends StatelessWidget {
-  final List<String> items;
-
-  const ChecklistList({super.key, required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const Text(
-        'Belum ada checklist.',
-        style: TextStyle(color: AppColors.textSecondary),
-      );
-    }
-    return Column(
-      children: items
-          .map(
-            (e) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    size: 18,
-                    color: Colors.green,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(e),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class WashPhoto extends StatelessWidget {
-  final BusWash bus;
-
-  const WashPhoto({super.key, required this.bus});
-
-  Widget _uploaded() => Container(
-        color: const Color(0xFFE6F4E7),
-        child: const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 28),
-              SizedBox(height: 4),
-              Text(
-                'Terunggah',
-                style: TextStyle(fontSize: 11, color: Colors.green),
-              ),
-            ],
-          ),
-        ),
-      );
-
-  Widget _placeholder() => Container(
-        color: AppColors.background,
-        child: const Center(
-          child: Icon(Icons.image_outlined, color: Colors.grey, size: 32),
-        ),
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final url = bus.photo;
-
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: url == null
-            ? _placeholder()
-            : (url.startsWith('http')
-                ? Image.network(
-                    url,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _placeholder(),
-                  )
-                : _uploaded()),
-      ),
-    );
-  }
-}
-
 void showBusDetail(BuildContext context, BusWash bus) {
   showModalBottomSheet(
     context: context,
@@ -307,7 +214,11 @@ class _DetailSheet extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${bus.brand} • ${bus.date}',
+              [
+                bus.brand,
+                bus.date,
+                if (bus.branchName != null) bus.branchName!,
+              ].join(' • '),
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
@@ -333,7 +244,7 @@ class _DetailSheet extends StatelessWidget {
               const _SectionTitle('Petugas'),
               ...bus.employees.map((e) => _EmployeeTile(employee: e)),
             ],
-            if (_hasProof(bus)) JobProofSection(jobId: bus.id),
+            if (_hasChecklist(bus)) JobChecklistSection(jobId: bus.id),
             if (bus.inspectionNote != null) ...[
               const _SectionTitle('Hasil pemeriksaan'),
               Text(bus.inspectionNote!),

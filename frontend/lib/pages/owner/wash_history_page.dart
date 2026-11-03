@@ -23,7 +23,9 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
 
   HistoryFilter _filter = const HistoryFilter();
 
-  bool get _isPegawai => AuthService.instance.user?.role == UserRole.pegawai;
+  UserRole? get _role => AuthService.instance.user?.role;
+  bool get _isPegawai => _role == UserRole.pegawai;
+  bool get _isOwner => _role == UserRole.owner;
 
   @override
   void dispose() {
@@ -45,6 +47,7 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
       context,
       current: _filter,
       canFilterMaster: !_isPegawai,
+      canFilterBranch: _isOwner,
     );
 
     if (result == null || !mounted) return;
@@ -59,15 +62,18 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
     Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => UnitHistoryPage(
-          unitId: unitId,
-          plateNumber: bus.plateNumber,
-        ),
+        builder: (_) =>
+            UnitHistoryPage(unitId: unitId, plateNumber: bus.plateNumber),
       ),
     );
   }
 
   Widget _buildSearchBar() {
+    OutlineInputBorder border() => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AppColors.border),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
@@ -83,14 +89,8 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
+                border: border(),
+                enabledBorder: border(),
               ),
             ),
           ),
@@ -124,6 +124,7 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
     final list = PagedBusList(
       filter: _filter,
       onUnitHistory: _isPegawai ? null : _openUnit,
+      showBranch: _isOwner,
     );
 
     if (_isPegawai) {
@@ -154,12 +155,7 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
           children: [
             _buildSearchBar(),
             Expanded(
-              child: TabBarView(
-                children: [
-                  list,
-                  RecapView(filter: _filter),
-                ],
-              ),
+              child: TabBarView(children: [list, RecapView(filter: _filter)]),
             ),
           ],
         ),

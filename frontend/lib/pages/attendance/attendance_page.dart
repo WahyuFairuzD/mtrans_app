@@ -1,7 +1,5 @@
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-
 import '../../models/app_user.dart';
 import '../../models/attendance.dart';
 import '../../models/branch.dart';
@@ -9,11 +7,17 @@ import '../../services/api_exception.dart';
 import '../../services/attendance_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/device_location.dart';
+import '../../services/master_service.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dialogs.dart';
+import '../../utils/wib.dart';
 import '../../widgets/attendance_widgets.dart';
 import '../../widgets/branch_badge.dart';
 import '../../widgets/branch_selection_sheet.dart';
 import 'capture_page.dart';
+
+const _unassignedBranchMessage =
+    'Cabang akun Pengawas belum ditetapkan. Hubungi administrator.';
 
 class AttendancePage extends StatefulWidget {
   const AttendancePage({super.key});
@@ -60,14 +64,14 @@ class _AttendancePageState extends State<AttendancePage> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        _service.fetchBranches(),
+      final (branches, records) = await (
+        MasterService.instance.fetchBranches(),
         _service.fetchMyToday(),
-      ]);
+      ).wait;
       if (!mounted) return;
       setState(() {
-        _branches = results[0] as List<Branch>;
-        _records = results[1] as List<AttendanceRecord>;
+        _branches = branches;
+        _records = records;
       });
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -85,7 +89,7 @@ class _AttendancePageState extends State<AttendancePage> {
       await AuthService.instance.setAttendanceBranchId(id);
       await _load();
     } on AuthException catch (error) {
-      if (mounted) _showMessage(error.message);
+      if (mounted) showSnack(context, error.message);
     }
   }
 
@@ -96,9 +100,7 @@ class _AttendancePageState extends State<AttendancePage> {
       if (_user?.role == UserRole.pegawai) {
         await _selectBranch();
       } else {
-        _showMessage(
-          'Cabang akun Pengawas belum ditetapkan. Hubungi administrator.',
-        );
+        showSnack(context, _unassignedBranchMessage);
       }
       return;
     }
@@ -123,24 +125,20 @@ class _AttendancePageState extends State<AttendancePage> {
         _records = [..._records, record]
           ..sort((a, b) => a.attendedAt.compareTo(b.attendedAt));
       });
-      _showMessage('Absen ${type.apiValue} berhasil dicatat.');
+      showSnack(context, 'Absen ${type.apiValue} berhasil dicatat.');
     } on DeviceLocationException catch (error) {
-      if (mounted) _showMessage(error.message);
+      if (mounted) showSnack(context, error.message);
     } on ApiException catch (error) {
       if (mounted) {
-        _showMessage(error.message);
+        showSnack(context, error.message);
         if (error.statusCode == 409) _load();
       }
     } catch (_) {
-      if (mounted) _showMessage('Absensi gagal disimpan. Coba lagi.');
+      if (mounted) showSnack(context, 'Absensi gagal disimpan. Coba lagi.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
-
-  void _showMessage(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) {
@@ -187,10 +185,7 @@ class _AttendancePageState extends State<AttendancePage> {
                       ),
                     )
                   else if (_user?.role == UserRole.pengawas && branch == null)
-                    const _ErrorBox(
-                      message:
-                          'Cabang akun Pengawas belum ditetapkan. Hubungi administrator.',
-                    ),
+                    const _ErrorBox(message: _unassignedBranchMessage),
                   _AttendanceStatusCard(
                     type: AttendanceType.masuk,
                     record: checkIn,
@@ -263,7 +258,7 @@ class _AttendanceStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = record?.wibTime;
+    final recorded = record;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Padding(
@@ -275,7 +270,7 @@ class _AttendanceStatusCard extends StatelessWidget {
               children: [
                 Icon(
                   type == AttendanceType.masuk ? Icons.login : Icons.logout,
-                  color: record != null ? Colors.green : AppColors.brand,
+                  color: recorded != null ? Colors.green : AppColors.brand,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -287,9 +282,9 @@ class _AttendanceStatusCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (time != null)
+                if (recorded != null)
                   Text(
-                    '${_two(time.hour)}:${_two(time.minute)}',
+                    wibTime(recorded.attendedAt),
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.green,
@@ -297,8 +292,8 @@ class _AttendanceStatusCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (record != null)
-              AttendanceRecordTile(record: record!)
+            if (recorded != null)
+              AttendanceRecordTile(record: recorded)
             else ...[
               const SizedBox(height: 8),
               Text(
@@ -319,7 +314,7 @@ class _AttendanceStatusCard extends StatelessWidget {
                       : const Icon(Icons.camera_alt_outlined),
                   label: Text(busy ? 'Memproses...' : type.label),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFD9191F),
+                    backgroundColor: AppColors.brand,
                   ),
                 ),
               ),
@@ -355,5 +350,3 @@ class _ErrorBox extends StatelessWidget {
     ),
   );
 }
-
-String _two(int value) => value.toString().padLeft(2, '0');
