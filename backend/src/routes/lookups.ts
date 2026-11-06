@@ -10,6 +10,7 @@ import type { AppEnv } from '../types'
 
 const lookups = new Hono<AppEnv>()
 
+// Publik: dipakai Petugas memilih cabang tepat setelah login.
 lookups.get('/branches', async (c) => {
   return c.json({ data: await listBranches(adminClient(c.env)) })
 })

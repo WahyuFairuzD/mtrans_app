@@ -1,5 +1,5 @@
 import { requireBranch } from '../lib/access'
-import { conflict, internal, notFound } from '../lib/errors'
+import { AppError, conflict, internal, notFound } from '../lib/errors'
 import type { Db } from '../lib/supabase'
 import { todayWib } from '../lib/time'
 import { ValidationError } from '../lib/validate'
@@ -9,6 +9,7 @@ export type AttendanceType = 'masuk' | 'pulang'
 
 export type AttendanceInput = {
   type: AttendanceType
+  /** Wajib untuk Petugas. Pengawas selalu memakai cabang akunnya. */
   branchId?: number
   latitude: number
   longitude: number
@@ -34,6 +35,7 @@ type AttendanceRow = {
 const COLUMNS = `id, user_id, branch_id, type, attended_at, work_date, latitude, longitude, accuracy_m, photo_path,
   profiles!attendance_user_id_fkey(full_name, role), branches!attendance_branch_id_fkey(name)`
 
+/** photo_path (key R2) tidak dikirim ke klien. Foto diambil lewat GET /attendance/:id/photo. */
 function toDto(row: AttendanceRow) {
   const { photo_path: _photoPath, profiles, branches, ...rest } = row
   return {
@@ -57,11 +59,12 @@ export async function listMine(db: Db, userId: string) {
   return ((data ?? []) as unknown as AttendanceRow[]).map(toDto)
 }
 
-export async function listToday(db: Db, branchId?: number) {
+/** Absensi semua pegawai pada satu tanggal kerja (WIB), opsional per cabang. */
+export async function listForDate(db: Db, date: string, branchId?: number) {
   let query = db
     .from('attendance')
     .select(COLUMNS)
-    .eq('work_date', todayWib())
+    .eq('work_date', date)
     .order('attended_at', { ascending: true })
   if (branchId !== undefined) query = query.eq('branch_id', branchId)
 
@@ -132,6 +135,10 @@ export async function submitAttendance(
   return toDto(row as unknown as AttendanceRow)
 }
 
+/**
+ * Ambil objek foto dari R2. Hanya pemilik absensi dan Owner yang boleh melihat.
+ * Akses yang ditolak dibalas "tidak ditemukan" supaya keberadaan data tidak bocor.
+ */
 export async function getAttendancePhoto(
   db: Db,
   bucket: R2Bucket,
@@ -151,6 +158,13 @@ export async function getAttendancePhoto(
   }
 
   const object = await bucket.get(data.photo_path as string)
-  if (!object) throw notFound('File foto tidak ditemukan.')
+  // Foto di R2 dihapus otomatis setelah 28 hari (aturan lifecycle bucket).
+  if (!object) {
+    throw new AppError(
+      410,
+      'PHOTO_EXPIRED',
+      'Foto sudah dihapus karena lebih dari 28 hari.',
+    )
+  }
   return object
 }

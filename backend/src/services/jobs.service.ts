@@ -29,6 +29,13 @@ export const jobNotFound = () => notFound('Pekerjaan tidak ditemukan.')
 
 type AccessibleJob = { id: string; status: string; branch_id: number }
 
+/**
+ * Ambil pekerjaan sesuai hak akses peran:
+ * - Petugas: hanya yang ditugaskan kepadanya
+ * - Pengawas: hanya di cabangnya
+ * - Owner: semua
+ * Akses yang ditolak dibalas "tidak ditemukan".
+ */
 export async function findAccessibleJob(
   db: Db,
   jobId: string,
@@ -198,6 +205,7 @@ export async function getJob(db: Db, user: AuthUser, id: string) {
 
 export type AssignInput = {
   pegawaiIds: string[]
+  /** null = pertahankan instruksi lama. '' = hapus instruksi. */
   instructions: string | null
 }
 

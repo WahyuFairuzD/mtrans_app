@@ -1,4 +1,4 @@
-package com.example.mtrans;
+package com.id.mtrans;
 
 import io.flutter.embedding.android.FlutterActivity;
 

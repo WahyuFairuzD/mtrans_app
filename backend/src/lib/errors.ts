@@ -1,5 +1,9 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
+/**
+ * Error yang sudah punya status HTTP dan kode untuk klien.
+ * Service melempar ini, lalu app.onError (index.ts) yang mengubahnya jadi respons JSON.
+ */
 export class AppError extends Error {
   readonly status: ContentfulStatusCode
   readonly code: string
@@ -23,6 +27,7 @@ export const forbidden = (message: string) =>
 export const tooLarge = (message: string) =>
   new AppError(413, 'PAYLOAD_TOO_LARGE', message)
 
+/** Catat penyebab asli di log, kirim pesan umum ke klien. */
 export function internal(cause: unknown, message: string): AppError {
   console.error(cause)
   return new AppError(500, 'INTERNAL_ERROR', message)
