@@ -6,8 +6,10 @@ import { apiError } from './lib/response'
 import { ValidationError } from './lib/validate'
 import attendance from './routes/attendance'
 import auth from './routes/auth'
+import invoices from './routes/invoices'
 import jobs from './routes/jobs'
 import lookups from './routes/lookups'
+import prices from './routes/prices'
 import stock from './routes/stock'
 import units from './routes/units'
 import type { AppEnv } from './types'
@@ -31,6 +33,8 @@ app.route('/attendance', attendance)
 app.route('/units', units)
 app.route('/jobs', jobs)
 app.route('/stock', stock)
+app.route('/prices', prices)
+app.route('/invoices', invoices)
 app.route('/', lookups)
 
 app.notFound((c) => c.json(apiError('NOT_FOUND', 'Endpoint tidak ditemukan.'), 404))

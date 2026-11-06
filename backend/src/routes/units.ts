@@ -12,10 +12,12 @@ import {
   ValidationError,
   type JsonObject,
 } from '../lib/validate'
+import { parseVehicleType } from '../lib/vehicle'
 import { requireAuth, requireRole } from '../middleware/auth'
 import {
   createUnit,
   listUnits,
+  PLATE_PLACEHOLDER,
   unitNotFound,
   updateUnit,
 } from '../services/units.service'
@@ -25,10 +27,12 @@ const units = new Hono<AppEnv>()
 
 units.use('*', requireAuth)
 
-const normalizePlate = (v: unknown) =>
-  requiredText(v, 'Nomor polisi', { min: 3, max: 15 })
-    .replace(/\s+/g, ' ')
-    .toUpperCase()
+/** Plat kosong dicatat sebagai "KOSONG" (bukan null) supaya jelas di invoice. */
+function normalizePlate(v: unknown): string {
+  const plate = text(v, 'Nomor polisi', { min: 3, max: 15 })
+  if (plate === undefined || plate === null) return PLATE_PLACEHOLDER
+  return plate.replace(/\s+/g, ' ').toUpperCase()
+}
 
 function parseUnitFields(raw: JsonObject, isCreate: boolean) {
   return compact({
@@ -36,9 +40,13 @@ function parseUnitFields(raw: JsonObject, isCreate: boolean) {
       isCreate || raw.plate_number !== undefined
         ? normalizePlate(raw.plate_number)
         : undefined,
+    // Kolom brand dipakai sebagai Nama Armada (tampil di invoice).
+    brand: isCreate
+      ? requiredText(raw.brand, 'Nama armada', { max: 100 })
+      : text(raw.brand, 'Nama armada', { max: 100 }),
     unit_name: text(raw.unit_name, 'Nama unit', { max: 100 }),
-    brand: text(raw.brand, 'Merek', { max: 100 }),
     bus_type: text(raw.bus_type, 'Tipe bus', { max: 100 }),
+    vehicle_type: parseVehicleType(raw.vehicle_type),
     capacity: intValue(raw.capacity, 'Kapasitas', { min: 1, max: 200 }),
     notes: text(raw.notes, 'Catatan', { max: 500 }),
   })
@@ -61,13 +69,13 @@ units.get('/', requireRole('owner', 'pengawas'), async (c) => {
   return c.json({ data, limit, offset })
 })
 
-units.post('/', requireRole('pengawas'), async (c) => {
+units.post('/', requireRole('owner', 'pengawas'), async (c) => {
   const fields = parseUnitFields(await readJson(c), true)
   const unit = await createUnit(adminClient(c.env), fields)
   return c.json({ message: 'Unit berhasil ditambahkan.', unit }, 201)
 })
 
-units.patch('/:id', requireRole('pengawas'), async (c) => {
+units.patch('/:id', requireRole('owner', 'pengawas'), async (c) => {
   const id = requireUuid(c.req.param('id'), unitNotFound)
 
   const raw = await readJson(c)

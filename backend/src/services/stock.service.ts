@@ -70,6 +70,7 @@ export async function listItems(db: Db, user: AuthUser, requestedBranch?: number
 }
 
 export type CreateItemInput = {
+  /** Wajib untuk Owner. Pengawas memakai cabang akunnya. */
   branchId?: number
   name: string
   category: string

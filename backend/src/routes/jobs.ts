@@ -31,6 +31,7 @@ jobs.use('*', requireAuth)
 
 const MAX_ASSIGNEES = 20
 
+// Filter yang sama dipakai daftar riwayat dan rekap.
 function parseFilters(c: Context<AppEnv>): JobFilters {
   const statusParam = c.req.query('status')
   const statuses = statusParam
@@ -93,6 +94,7 @@ jobs.get('/', async (c) => {
   return c.json({ data, limit, offset })
 })
 
+// Harus didaftarkan sebelum '/:id' supaya 'recap' tidak dianggap sebagai id.
 jobs.get('/recap', requireRole('owner', 'pengawas'), async (c) => {
   const recap = await jobRecap(adminClient(c.env), c.get('user'), parseFilters(c))
   return c.json({ recap })
@@ -109,6 +111,8 @@ jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
 
   const pegawaiIds = uuidList(raw.pegawai_ids, 'Petugas', 1, MAX_ASSIGNEES)
 
+  // undefined -> pertahankan instruksi lama (null ke assign_job).
+  // null atau '' -> hapus instruksi (string kosong, karena assign_job memakai coalesce).
   const instructions =
     raw.instructions === undefined
       ? null
@@ -121,6 +125,7 @@ jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
   return c.json({ message: 'Penugasan berhasil disimpan.', job })
 })
 
+// Mulai/selesai cuci, checklist, pemeriksaan, unit keluar (auth sudah dipasang di atas)
 jobs.route('/', work)
 
 export default jobs

@@ -35,6 +35,7 @@ function sessionPayload(session: Session, user: AuthUser) {
   }
 }
 
+/** Akun yang profilnya hilang atau nonaktif tidak boleh memegang sesi. */
 async function revokeAndDeny(
   env: Bindings,
   session: Session,

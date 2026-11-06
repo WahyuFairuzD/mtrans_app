@@ -2,18 +2,20 @@ import { Hono } from 'hono'
 import { notFound, tooLarge } from '../lib/errors'
 import { requireUuid } from '../lib/http'
 import { adminClient } from '../lib/supabase'
+import { todayWib } from '../lib/time'
 import {
   formNumber,
   optionalBranchId,
   optionalFormNumber,
   requiredBranchId,
+  requiredIsoDate,
   ValidationError,
 } from '../lib/validate'
 import { requireAuth, requireRole } from '../middleware/auth'
 import {
   getAttendancePhoto,
+  listForDate,
   listMine,
-  listToday,
   submitAttendance,
   type AttendanceType,
 } from '../services/attendance.service'
@@ -36,9 +38,18 @@ attendance.get('/me/today', requireRole('pegawai', 'pengawas'), async (c) => {
   return c.json({ data })
 })
 
+// Owner: absensi semua pegawai pada satu tanggal (?date=YYYY-MM-DD), opsional per cabang.
+attendance.get('/day', requireRole('owner'), async (c) => {
+  const date = requiredIsoDate(c.req.query('date'), 'Tanggal')
+  const branchId = optionalBranchId(c.req.query('branch_id'))
+  const data = await listForDate(adminClient(c.env), date, branchId)
+  return c.json({ data, date })
+})
+
+// Sama seperti /day untuk hari ini (dipertahankan agar aplikasi lama tetap jalan).
 attendance.get('/today', requireRole('owner'), async (c) => {
   const branchId = optionalBranchId(c.req.query('branch_id'))
-  const data = await listToday(adminClient(c.env), branchId)
+  const data = await listForDate(adminClient(c.env), todayWib(), branchId)
   return c.json({ data })
 })
 
@@ -82,6 +93,7 @@ attendance.post('/', requireRole('pegawai', 'pengawas'), async (c) => {
     throw new ValidationError('Foto absensi harus berformat JPEG.')
   }
 
+  // Pengawas memakai cabang akunnya. Petugas wajib memilih cabang.
   const branchId =
     user.role === 'pengawas' ? undefined : requiredBranchId(form['branch_id'])
 
@@ -100,6 +112,7 @@ attendance.post('/', requireRole('pegawai', 'pengawas'), async (c) => {
   )
 })
 
+// Didaftarkan terakhir supaya tidak bentrok dengan /me/today dan /today.
 attendance.get('/:id/photo', async (c) => {
   const id = requireUuid(c.req.param('id'), () =>
     notFound('Absensi tidak ditemukan.'),

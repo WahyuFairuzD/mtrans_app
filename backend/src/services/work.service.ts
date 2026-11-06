@@ -12,6 +12,10 @@ const checklistNotFound = () => notFound('Item checklist tidak ditemukan.')
 
 type Transition = { from: string; to: string; wrongState: string }
 
+/**
+ * Pindah status secara atomik: update hanya berhasil bila status masih `from`,
+ * jadi dua permintaan bersamaan tidak bisa sama-sama lolos.
+ */
 async function transition(db: Db, user: AuthUser, id: string, t: Transition) {
   const job = await findAccessibleJob(db, id, user)
   if (job.status !== t.from) throw conflict(t.wrongState)
