@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/dialogs.dart';
 import '../../widgets/branch_badge.dart';
 import '../../widgets/error_state.dart';
+import '../../widgets/unit_form_sheet.dart';
 
 class InputBusPage extends StatefulWidget {
   const InputBusPage({super.key});
@@ -67,6 +68,8 @@ class _InputBusPageState extends State<InputBusPage> {
       ).wait;
 
       if (!mounted) return;
+
+      // Cabang Pengawas ditetapkan di akunnya; di sini hanya ditampilkan.
       final branchId = AuthService.instance.user?.branchId;
       String? branchName;
       for (final branch in branches) {
@@ -91,21 +94,12 @@ class _InputBusPageState extends State<InputBusPage> {
   }
 
   Future<void> _addUnit() async {
-    final unit = await showModalBottomSheet<BusUnit>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => const _NewUnitSheet(),
-    );
-
+    final unit = await showUnitFormSheet(context);
     if (unit == null || !mounted) return;
 
     setState(() {
       _units = [..._units, unit]
-        ..sort((a, b) => a.plateNumber.compareTo(b.plateNumber));
+        ..sort((a, b) => a.armadaName.compareTo(b.armadaName));
       _unitId = unit.id;
     });
   }
@@ -169,12 +163,12 @@ class _InputBusPageState extends State<InputBusPage> {
             key: ValueKey('unit-$_unitId'),
             initialValue: _unitId,
             isExpanded: true,
-            decoration: filledInputDecoration('Nomor Polisi'),
+            decoration: filledInputDecoration('Unit (nama armada · plat)'),
             items: _units
                 .map(
                   (u) => DropdownMenuItem<String>(
                     value: u.id,
-                    child: Text(u.plateNumber),
+                    child: Text(u.displayLabel),
                   ),
                 )
                 .toList(),
@@ -186,7 +180,7 @@ class _InputBusPageState extends State<InputBusPage> {
               Expanded(
                 child: Text(
                   unit != null
-                      ? 'Merek: ${unit.brand ?? '-'}'
+                      ? 'Jenis: ${unit.vehicleType.label}'
                       : (_units.isEmpty
                             ? 'Belum ada unit. Tambahkan dulu.'
                             : ''),
@@ -266,139 +260,6 @@ class _InputBusPageState extends State<InputBusPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _NewUnitSheet extends StatefulWidget {
-  const _NewUnitSheet();
-
-  @override
-  State<_NewUnitSheet> createState() => _NewUnitSheetState();
-}
-
-class _NewUnitSheetState extends State<_NewUnitSheet> {
-  final TextEditingController _plate = TextEditingController();
-  final TextEditingController _brand = TextEditingController();
-
-  bool _saving = false;
-  String? _error;
-
-  bool get _valid =>
-      _plate.text.trim().length >= 3 &&
-      _brand.text.trim().isNotEmpty &&
-      !_saving;
-
-  @override
-  void dispose() {
-    _plate.dispose();
-    _brand.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_valid) return;
-
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-
-    try {
-      final unit = await MasterService.instance.createUnit(
-        plateNumber: _plate.text.trim(),
-        brand: _brand.text.trim(),
-      );
-
-      if (!mounted) return;
-      Navigator.pop<BusUnit>(context, unit);
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Terjadi kesalahan. Coba lagi.');
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Unit Baru',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _plate,
-                textCapitalization: TextCapitalization.characters,
-                maxLength: 15,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: 'Nomor Polisi',
-                  hintText: 'N 1234 AB',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _brand,
-                textCapitalization: TextCapitalization.words,
-                maxLength: 100,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: 'Merek Bus',
-                  hintText: 'Contoh: Hino',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red, fontSize: 13),
-                ),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _valid ? _submit : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Simpan Unit'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

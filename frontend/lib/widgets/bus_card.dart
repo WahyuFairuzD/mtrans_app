@@ -13,6 +13,8 @@ bool _checklistDone(BusWash bus) =>
 class BusCard extends StatelessWidget {
   final BusWash bus;
   final bool showDate;
+
+  /// Tampilkan nama cabang (berguna untuk Owner yang melihat semua cabang).
   final bool showBranch;
   final String? actionLabel;
   final VoidCallback? onAction;

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../models/attendance.dart';
+import '../utils/invoice_format.dart';
 import 'api_client.dart';
 import 'api_exception.dart';
 import 'auth_service.dart';
@@ -28,11 +29,17 @@ class AttendanceService {
     }
   }
 
-  Future<List<AttendanceRecord>> fetchOwnerToday({int? branchId}) async {
+  Future<List<AttendanceRecord>> fetchOwnerDay({
+    required DateTime date,
+    int? branchId,
+  }) async {
     try {
       final response = await _dio.get(
-        '/attendance/today',
-        queryParameters: branchId == null ? null : {'branch_id': branchId},
+        '/attendance/day',
+        queryParameters: {
+          'date': isoDate(date),
+          if (branchId != null) 'branch_id': branchId,
+        },
       );
       return _records(response.data as Map<String, dynamic>);
     } on DioException catch (error) {

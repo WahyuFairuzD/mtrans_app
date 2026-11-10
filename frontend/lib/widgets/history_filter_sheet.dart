@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/assignment.dart';
-import '../models/branch.dart';
 import '../models/bus_wash.dart';
 import '../models/history_filter.dart';
 import '../models/master_data.dart';
@@ -10,11 +9,15 @@ import '../services/pegawai_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/wib.dart';
 
+/// Mengembalikan filter baru, atau null kalau ditutup tanpa menerapkan.
+///
+/// [canFilterMaster]: boleh memfilter jenis layanan dan petugas (Owner, Pengawas).
+/// Cabang tidak difilter di sini: Owner memilihnya di Setting > Lokasi,
+/// Pengawas sudah dikunci ke cabangnya oleh server.
 Future<HistoryFilter?> showHistoryFilterSheet(
   BuildContext context, {
   required HistoryFilter current,
   required bool canFilterMaster,
-  required bool canFilterBranch,
 }) {
   return showModalBottomSheet<HistoryFilter>(
     context: context,
@@ -23,24 +26,16 @@ Future<HistoryFilter?> showHistoryFilterSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => _FilterSheet(
-      current: current,
-      canFilterMaster: canFilterMaster,
-      canFilterBranch: canFilterBranch,
-    ),
+    builder: (_) =>
+        _FilterSheet(current: current, canFilterMaster: canFilterMaster),
   );
 }
 
 class _FilterSheet extends StatefulWidget {
   final HistoryFilter current;
   final bool canFilterMaster;
-  final bool canFilterBranch;
 
-  const _FilterSheet({
-    required this.current,
-    required this.canFilterMaster,
-    required this.canFilterBranch,
-  });
+  const _FilterSheet({required this.current, required this.canFilterMaster});
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -51,18 +46,14 @@ class _FilterSheetState extends State<_FilterSheet> {
   DateTime? _from;
   DateTime? _to;
   late Set<WashStatus> _statuses;
-  int? _branchId;
   String? _serviceId;
   String? _pegawaiId;
 
-  List<Branch> _branches = [];
   List<ServiceTypeItem> _services = [];
   List<PegawaiItem> _pegawai = [];
 
   bool _loadingLookups = false;
   String? _lookupError;
-
-  bool get _needsLookups => widget.canFilterMaster || widget.canFilterBranch;
 
   @override
   void initState() {
@@ -73,11 +64,10 @@ class _FilterSheetState extends State<_FilterSheet> {
     _from = c.customFrom;
     _to = c.customTo;
     _statuses = {...c.statuses};
-    _branchId = c.branchId;
     _serviceId = c.serviceTypeId;
     _pegawaiId = c.pegawaiId;
 
-    if (_needsLookups) _loadLookups();
+    if (widget.canFilterMaster) _loadLookups();
   }
 
   Future<void> _loadLookups() async {
@@ -87,21 +77,12 @@ class _FilterSheetState extends State<_FilterSheet> {
     });
 
     try {
-      final master = MasterService.instance;
-      final branches = widget.canFilterBranch
-          ? await master.fetchBranches()
-          : <Branch>[];
-      final services = widget.canFilterMaster
-          ? await master.fetchServiceTypes()
-          : <ServiceTypeItem>[];
-      final pegawai = widget.canFilterMaster
-          ? await PegawaiService.instance.fetchPegawai()
-          : <PegawaiItem>[];
+      final services = await MasterService.instance.fetchServiceTypes();
+      final pegawai = await PegawaiService.instance.fetchPegawai();
 
       if (!mounted) return;
 
       setState(() {
-        _branches = branches;
         _services = services;
         _pegawai = pegawai;
       });
@@ -146,7 +127,6 @@ class _FilterSheetState extends State<_FilterSheet> {
       _from = null;
       _to = null;
       _statuses = {};
-      _branchId = null;
       _serviceId = null;
       _pegawaiId = null;
     });
@@ -162,7 +142,7 @@ class _FilterSheetState extends State<_FilterSheet> {
         customFrom: _preset == DatePreset.custom ? _from : null,
         customTo: _preset == DatePreset.custom ? _to : null,
         statuses: _statuses,
-        branchId: _branchId,
+        branchId: c.branchId,
         serviceTypeId: _serviceId,
         pegawaiId: _pegawaiId,
         unitId: c.unitId,
@@ -244,9 +224,7 @@ class _FilterSheetState extends State<_FilterSheet> {
       );
     }
 
-    final branchValue = _branches.any((b) => b.id == _branchId)
-        ? _branchId
-        : null;
+    // Nilai yang tidak ada di daftar (mis. daftar belum termuat) jadi "Semua".
     final serviceValue = _services.any((s) => s.id == _serviceId)
         ? _serviceId
         : null;
@@ -256,15 +234,6 @@ class _FilterSheetState extends State<_FilterSheet> {
 
     return Column(
       children: [
-        if (widget.canFilterBranch)
-          _dropdown<int>(
-            label: 'Cabang',
-            value: branchValue,
-            items: _branches
-                .map((b) => DropdownMenuItem<int?>(value: b.id, child: Text(b.name)))
-                .toList(),
-            onChanged: (v) => setState(() => _branchId = v),
-          ),
         if (widget.canFilterMaster) ...[
           _dropdown<String>(
             label: 'Jenis layanan',
@@ -364,7 +333,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               }).toList(),
             ),
 
-            if (_needsLookups) ...[
+            if (widget.canFilterMaster) ...[
               const SizedBox(height: 16),
               _lookupFields(),
             ],

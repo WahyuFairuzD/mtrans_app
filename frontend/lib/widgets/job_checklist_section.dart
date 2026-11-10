@@ -4,6 +4,7 @@ import '../services/api_exception.dart';
 import '../services/work_service.dart';
 import '../theme/app_theme.dart';
 
+/// Daftar checklist hasil kerja satu pekerjaan (hanya baca).
 class JobChecklistSection extends StatefulWidget {
   final String jobId;
 

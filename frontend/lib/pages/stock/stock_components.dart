@@ -80,7 +80,7 @@ class StockErrorState extends StatelessWidget {
   }
 }
 
-// 4. DETAIL BARANG DAN ALUR PERUBAHAN STOK
+// Detail barang dan alur perubahan stok
 
 class StockSectionHeader extends StatelessWidget {
   const StockSectionHeader({
@@ -207,10 +207,18 @@ class StockEmptySection extends StatelessWidget {
 }
 
 class StockItemCard extends StatelessWidget {
-  const StockItemCard({super.key, required this.item, required this.onTap});
+  const StockItemCard({
+    super.key,
+    required this.item,
+    required this.onTap,
+    this.branchLabel,
+  });
 
   final StockItem item;
   final VoidCallback onTap;
+
+  /// Nama cabang, ditampilkan saat Owner melihat semua lokasi sekaligus.
+  final String? branchLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -219,6 +227,9 @@ class StockItemCard extends StatelessWidget {
         : stockCategoryEquipment;
     final color = stockCategoryColor(category);
     final empty = item.quantity <= 0;
+    final subtitle = branchLabel == null || branchLabel!.isEmpty
+        ? category
+        : '$category · $branchLabel';
 
     return Material(
       color: Colors.white,
@@ -256,7 +267,7 @@ class StockItemCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      category,
+                      subtitle,
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 12,

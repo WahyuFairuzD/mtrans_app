@@ -29,6 +29,7 @@ class AppTheme {
   );
 }
 
+/// Field isian putih berbingkai yang dipakai di banyak form.
 InputDecoration filledInputDecoration(String label, {bool multiline = false}) {
   return InputDecoration(
     labelText: label,

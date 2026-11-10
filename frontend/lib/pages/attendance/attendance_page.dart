@@ -1,5 +1,7 @@
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
 import '../../models/app_user.dart';
 import '../../models/attendance.dart';
 import '../../models/branch.dart';

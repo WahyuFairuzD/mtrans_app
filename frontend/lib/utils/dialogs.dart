@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Dialog konfirmasi Batal / Ya. Mengembalikan true hanya bila dikonfirmasi.
 Future<bool> confirmDialog(
   BuildContext context, {
   required String title,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
+/// Kartu menu di dashboard (Absensi, Kelola Stok, dll).
 class EntryCard extends StatelessWidget {
   const EntryCard({
     super.key,

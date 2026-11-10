@@ -1,10 +1,14 @@
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
 import '../models/attendance.dart';
+import '../services/api_exception.dart';
 import '../services/attendance_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/wib.dart';
 
+/// Foto absensi dari R2. Diunduh lewat API (butuh token) lalu di-cache di memori.
 class AttendancePhotoImage extends StatelessWidget {
   const AttendancePhotoImage({
     super.key,
@@ -14,6 +18,24 @@ class AttendancePhotoImage extends StatelessWidget {
 
   final String attendanceId;
   final BoxFit fit;
+
+  Widget _expired() => Container(
+    color: AppColors.background,
+    padding: const EdgeInsets.all(4),
+    child: const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.hide_image_outlined, size: 18, color: Colors.grey),
+          SizedBox(height: 2),
+          Text(
+            'Dihapus',
+            style: TextStyle(fontSize: 9, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _placeholder({bool loading = false}) => Container(
     color: AppColors.background,
@@ -33,7 +55,14 @@ class AttendancePhotoImage extends StatelessWidget {
     return FutureBuilder<Uint8List>(
       future: AttendanceService.instance.photoBytes(attendanceId),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return _placeholder();
+        if (snapshot.hasError) {
+          // Foto di R2 dihapus otomatis setelah 28 hari.
+          final error = snapshot.error;
+          if (error is ApiException && error.code == 'PHOTO_EXPIRED') {
+            return _expired();
+          }
+          return _placeholder();
+        }
 
         final bytes = snapshot.data;
         if (bytes == null) return _placeholder(loading: true);
@@ -149,9 +178,15 @@ class AttendancePhotoViewer extends StatelessWidget {
             Expanded(
               child: Center(
                 child: InteractiveViewer(
-                  child: AttendancePhotoImage(
-                    attendanceId: record.id,
-                    fit: BoxFit.contain,
+                  // Ukuran tetap supaya placeholder (muat/gagal/dihapus) tidak
+                  // meminta ruang tak terbatas di dalam InteractiveViewer.
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width,
+                    height: MediaQuery.of(context).size.height * 0.6,
+                    child: AttendancePhotoImage(
+                      attendanceId: record.id,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),
