@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+
 import '../models/branch.dart';
 import '../services/api_exception.dart';
 import '../services/auth_service.dart';
 import '../services/master_service.dart';
 import '../theme/app_theme.dart';
 
-Future<int?> selectAttendanceBranch(BuildContext context) async {
+/// Lembar pilihan cabang. Mengembalikan id cabang, atau null bila ditutup.
+Future<int?> pickBranch(
+  BuildContext context, {
+  required String title,
+  required String subtitle,
+}) async {
   List<Branch> branches;
   try {
     branches = await MasterService.instance.fetchBranches();
@@ -30,14 +36,14 @@ Future<int?> selectAttendanceBranch(BuildContext context) async {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Pilih Cabang Absensi',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Cabang ini digunakan untuk absen masuk dan pulang hari ini.',
-              style: TextStyle(color: AppColors.textSecondary),
+            Text(
+              subtitle,
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 12),
             ...branches.map(
@@ -55,3 +61,10 @@ Future<int?> selectAttendanceBranch(BuildContext context) async {
     ),
   );
 }
+
+/// Pilihan cabang untuk absensi Petugas.
+Future<int?> selectAttendanceBranch(BuildContext context) => pickBranch(
+  context,
+  title: 'Pilih Cabang Absensi',
+  subtitle: 'Cabang ini digunakan untuk absen masuk dan pulang hari ini.',
+);

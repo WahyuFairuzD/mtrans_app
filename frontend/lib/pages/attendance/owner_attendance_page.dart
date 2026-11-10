@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+
 import '../../models/attendance.dart';
-import '../../models/branch.dart';
 import '../../services/api_exception.dart';
 import '../../services/attendance_service.dart';
-import '../../services/master_service.dart';
+import '../../services/location_settings.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/invoice_format.dart';
 import '../../utils/wib.dart';
 import '../../widgets/attendance_widgets.dart';
-import '../../widgets/branch_filter_chips.dart';
 
 class OwnerAttendancePage extends StatefulWidget {
   const OwnerAttendancePage({super.key});
@@ -16,17 +16,36 @@ class OwnerAttendancePage extends StatefulWidget {
 }
 
 class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
+  /// Foto absensi dihapus otomatis dari penyimpanan setelah 28 hari.
+  static const _photoRetentionDays = 28;
+
   final _service = AttendanceService.instance;
-  List<Branch> _branches = [];
   List<AttendanceRecord> _records = [];
-  int? _selectedBranch;
+  late DateTime _today;
+  late DateTime _date;
+  bool _ready = false;
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    final now = toWib(DateTime.now());
+    _today = DateTime(now.year, now.month, now.day);
+    _date = _today;
+    _bootstrap();
+  }
+
+  /// Cabang mengikuti Setting > Lokasi (satu cabang atau semua).
+  Future<void> _bootstrap() async {
+    try {
+      await LocationSettings.instance.ensureLoaded();
+    } catch (_) {
+      // Tanpa daftar lokasi, tampilkan semua cabang.
+    }
+    if (!mounted) return;
+    setState(() => _ready = true);
+    await _load();
   }
 
   Future<void> _load() async {
@@ -35,28 +54,44 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
       _error = null;
     });
     try {
-      final (branches, records) = await (
-        MasterService.instance.fetchBranches(),
-        _service.fetchOwnerToday(branchId: _selectedBranch),
-      ).wait;
+      final records = await _service.fetchOwnerDay(
+        date: _date,
+        branchId: LocationSettings.instance.branchId,
+      );
       if (!mounted) return;
-      setState(() {
-        _branches = branches;
-        _records = records;
-      });
+      setState(() => _records = records);
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Gagal memuat absensi hari ini.');
+      if (mounted) setState(() => _error = 'Gagal memuat absensi.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _selectBranch(int? id) {
-    setState(() => _selectedBranch = id);
+  void _goTo(DateTime date) {
+    if (date.isAfter(_today)) return;
+    setState(() => _date = date);
     _load();
   }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2025),
+      lastDate: _today,
+      helpText: 'Pilih tanggal absensi',
+    );
+    if (picked != null && mounted) {
+      _goTo(DateTime(picked.year, picked.month, picked.day));
+    }
+  }
+
+  bool get _isToday => _date == _today;
+
+  bool get _photosExpired =>
+      _today.difference(_date).inDays > _photoRetentionDays;
 
   Map<String, List<AttendanceRecord>> get _grouped {
     final grouped = <String, List<AttendanceRecord>>{};
@@ -80,79 +115,164 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
       );
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Absensi Hari Ini'),
+        title: const Text('Absensi'),
         actions: [
           IconButton(
-            onPressed: _load,
+            onPressed: _ready ? _load : null,
             icon: const Icon(Icons.refresh),
             tooltip: 'Muat ulang',
           ),
         ],
       ),
-      body: Column(
-        children: [
-          BranchFilterChips(
-            branches: _branches,
-            selectedId: _selectedBranch,
-            onSelected: _selectBranch,
-          ),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                _error!,
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-            ),
-          Expanded(
-            child: _loading && _records.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _SummaryCard(
-                                label: 'Sudah Masuk',
-                                value: _countType(AttendanceType.masuk),
-                                icon: Icons.login,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _SummaryCard(
-                                label: 'Sudah Pulang',
-                                value: _countType(AttendanceType.pulang),
-                                icon: Icons.logout,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        if (grouped.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 36),
-                            child: Text(
-                              'Belum ada catatan absensi hari ini.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: AppColors.textSecondary),
-                            ),
-                          )
-                        else
-                          ...grouped.map(
-                            (entry) =>
-                                _EmployeeAttendanceCard(records: entry.value),
-                          ),
-                      ],
+      body: !_ready
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                _buildDateBar(),
+                if (_loading) const LinearProgressIndicator(minHeight: 2),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(color: Colors.red.shade700),
                     ),
                   ),
+                Expanded(
+                  child: _loading && _records.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(16),
+                            children: [
+                              if (_photosExpired) _buildExpiredNote(),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _SummaryCard(
+                                      label: 'Sudah Masuk',
+                                      value: _countType(AttendanceType.masuk),
+                                      icon: Icons.login,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _SummaryCard(
+                                      label: 'Sudah Pulang',
+                                      value: _countType(AttendanceType.pulang),
+                                      icon: Icons.logout,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              if (grouped.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 36),
+                                  child: Text(
+                                    'Belum ada catatan absensi pada tanggal ini.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                )
+                              else
+                                ...grouped.map(
+                                  (entry) => _EmployeeAttendanceCard(
+                                    records: entry.value,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildDateBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Hari sebelumnya',
+                onPressed: () => _goTo(
+                  DateTime(_date.year, _date.month, _date.day - 1),
+                ),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.calendar_month, size: 18),
+                  label: Text(
+                    _isToday
+                        ? 'Hari ini · ${formatLongDate(_date)}'
+                        : formatLongDate(_date),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black87,
+                    backgroundColor: Colors.white,
+                    side: const BorderSide(color: AppColors.border),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Hari berikutnya',
+                onPressed: _isToday
+                    ? null
+                    : () => _goTo(
+                        DateTime(_date.year, _date.month, _date.day + 1),
+                      ),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  LocationSettings.instance.label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildExpiredNote() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Foto absensi lebih dari $_photoRetentionDays hari sudah dihapus otomatis. Catatan jam dan lokasi tetap tersimpan.',
+        style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
       ),
     );
   }

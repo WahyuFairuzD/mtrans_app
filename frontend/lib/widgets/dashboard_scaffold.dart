@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
-import 'profile_button.dart';
+import 'settings_button.dart';
 
 const _logoAsset = 'assets/images/kpbputih.png';
 
+/// Kerangka dashboard semua peran: header merah (profil, logo, sapaan),
+/// tarik-untuk-muat-ulang, dan isi yang bisa digulir.
 class DashboardScaffold extends StatelessWidget {
   const DashboardScaffold({
     super.key,
@@ -85,7 +87,7 @@ class _Header extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const ProfileButton(),
+              const SettingsButton(),
               const Spacer(),
               Image.asset(_logoAsset, height: 120, fit: BoxFit.contain),
             ],

@@ -7,9 +7,14 @@ import '../theme/app_theme.dart';
 import 'bus_card.dart';
 import 'error_state.dart';
 
+/// Daftar bus yang dimuat bertahap dari server sesuai filter.
 class PagedBusList extends StatefulWidget {
   final HistoryFilter filter;
+
+  /// Kalau diisi, tiap kartu punya tombol "Riwayat unit ini".
   final void Function(BusWash bus)? onUnitHistory;
+
+  /// Tampilkan nama cabang di tiap kartu (untuk Owner).
   final bool showBranch;
 
   const PagedBusList({

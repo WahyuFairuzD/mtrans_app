@@ -12,6 +12,8 @@ class StockService {
 
   Dio get _dio => ApiClient.dio;
 
+  /// [branchId] hanya berpengaruh untuk Owner. Pengawas selalu dikunci
+  /// ke cabangnya oleh server.
   Future<({List<StockItem> items, int changesToday})> fetchItems({
     int? branchId,
   }) async {
@@ -34,6 +36,7 @@ class StockService {
     }
   }
 
+  /// [branchId] wajib untuk Owner, diabaikan untuk Pengawas.
   Future<StockChange> createItem({
     int? branchId,
     required String name,

@@ -7,6 +7,7 @@ class RecapRow {
 
   factory RecapRow.fromJson(Map<String, dynamic> j) {
     return RecapRow(
+      // ID cabang berupa angka, ID petugas berupa UUID: samakan jadi teks.
       id: (j['id'] ?? '').toString(),
       name: (j['name'] as String?) ?? '-',
       total: (j['total'] as num?)?.toInt() ?? 0,

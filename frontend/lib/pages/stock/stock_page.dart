@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../../models/app_user.dart';
-import '../../models/branch.dart';
 import '../../models/stock.dart';
 import '../../services/api_exception.dart';
 import '../../services/auth_service.dart';
-import '../../services/master_service.dart';
+import '../../services/location_settings.dart';
 import '../../services/stock_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/branch_filter_chips.dart';
+import '../../widgets/branch_badge.dart';
+import '../../widgets/branch_selection_sheet.dart';
 import 'stock_components.dart';
 import 'stock_page_support.dart';
 import 'stock_sheets.dart';
@@ -26,8 +27,12 @@ class _StockPageState extends State<StockPage> {
   int _tab = 0;
   String _selectedCategory = stockCategoryOperational;
   String _searchText = '';
-  List<Branch> _branches = [];
+
+  // Cabang. Owner mengikuti Setting > Lokasi (null = semua cabang);
+  // Pengawas dikunci server ke cabangnya.
   int? _branchFilter;
+
+  // Daftar stok
   List<StockItem> _items = [];
   int _changesToday = 0;
   bool _itemsLoading = false;
@@ -35,6 +40,7 @@ class _StockPageState extends State<StockPage> {
   String? _itemsError;
   int _itemsGen = 0;
 
+  // Riwayat
   List<StockMovement> _movements = [];
   bool _movementsLoading = false;
   bool _movementsLoaded = false;
@@ -61,6 +67,7 @@ class _StockPageState extends State<StockPage> {
     super.dispose();
   }
 
+  /// Dua kategori barang yang tersedia.
   List<String> get _categories => [
     stockCategoryOperational,
     stockCategoryEquipment,
@@ -88,22 +95,31 @@ class _StockPageState extends State<StockPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Nama cabang untuk label, hanya saat Owner melihat semua lokasi.
+  String? _branchLabelFor(int? branchId) {
+    if (!_isOwner || _branchFilter != null || branchId == null) return null;
+    for (final branch in LocationSettings.instance.branches) {
+      if (branch.id == branchId) return branch.name;
+    }
+    return null;
+  }
+
+  // ===================== MUAT DATA =====================
+
+  /// Owner: tunggu pilihan lokasi (Setting) termuat, lalu muat stoknya.
   Future<void> _bootstrap() async {
-    if (_isOwner && _branchFilter == null) {
+    if (_isOwner) {
       try {
-        final branches = await MasterService.instance.fetchBranches();
+        await LocationSettings.instance.ensureLoaded();
         if (!mounted) return;
-        setState(() {
-          _branches = branches;
-          _branchFilter = branches.isEmpty ? null : branches.first.id;
-        });
+        setState(() => _branchFilter = LocationSettings.instance.branchId);
       } on ApiException catch (e) {
         if (mounted) setState(() => _itemsError = e.message);
         return;
       } catch (_) {
         if (mounted) {
           setState(
-            () => _itemsError = 'Terjadi kesalahan saat memuat cabang. Coba lagi.',
+            () => _itemsError = 'Terjadi kesalahan saat memuat lokasi. Coba lagi.',
           );
         }
         return;
@@ -181,19 +197,6 @@ class _StockPageState extends State<StockPage> {
     }
   }
 
-  void _selectBranch(int? id) {
-    if (id == _branchFilter) return;
-    setState(() {
-      _branchFilter = id;
-      _items = [];
-      _itemsLoaded = false;
-      _movements = [];
-      _movementsLoaded = false;
-    });
-    _loadItems();
-    if (_tab == 1) _loadMovements();
-  }
-
   Future<void> _pickRange() async {
     final now = stockNowWib();
     final picked = await showDateRangePicker(
@@ -213,6 +216,8 @@ class _StockPageState extends State<StockPage> {
     setState(() => _range = null);
     await _loadMovements();
   }
+
+  // ===================== AKSI =====================
 
   Future<void> _adjustStock(
     StockItem item, {
@@ -256,6 +261,7 @@ class _StockPageState extends State<StockPage> {
     } on ApiException catch (e) {
       if (!mounted) return;
       _showMessage(e.message);
+      // Stok di layar bisa sudah usang (mis. diubah orang lain): muat ulang.
       if (e.statusCode == 409 || e.statusCode == 404) _loadItems();
     } catch (_) {
       if (mounted) _showMessage('Terjadi kesalahan. Coba lagi.');
@@ -285,9 +291,20 @@ class _StockPageState extends State<StockPage> {
   }
 
   Future<void> _openAddItem(String category) async {
-    if (_isOwner && _branchFilter == null) {
-      _showMessage('Pilih cabang dulu untuk menambah barang.');
-      return;
+    // Owner di mode "Semua Lokasi" memilih cabang tujuan barang baru.
+    var targetBranch = _isOwner ? _branchFilter : null;
+    if (_isOwner && targetBranch == null) {
+      try {
+        targetBranch = await pickBranch(
+          context,
+          title: 'Pilih Cabang',
+          subtitle: 'Barang baru akan ditambahkan ke cabang ini.',
+        );
+      } on AuthException catch (e) {
+        if (mounted) _showMessage(e.message);
+        return;
+      }
+      if (targetBranch == null || !mounted) return;
     }
 
     final result = await showModalBottomSheet<StockChange>(
@@ -296,10 +313,8 @@ class _StockPageState extends State<StockPage> {
       showDragHandle: true,
       backgroundColor: Colors.white,
       shape: stockSheetShape,
-      builder: (_) => AddStockItemSheet(
-        category: category,
-        branchId: _isOwner ? _branchFilter : null,
-      ),
+      builder: (_) =>
+          AddStockItemSheet(category: category, branchId: targetBranch),
     );
     if (result == null || !mounted) return;
 
@@ -316,6 +331,8 @@ class _StockPageState extends State<StockPage> {
 
     _showMessage('Barang ${result.item.name} berhasil ditambahkan.');
   }
+
+  // ===================== TAMPILAN =====================
 
   @override
   Widget build(BuildContext context) {
@@ -338,14 +355,12 @@ class _StockPageState extends State<StockPage> {
             children: [
               if (_busy || (_itemsLoading && _itemsLoaded))
                 const LinearProgressIndicator(minHeight: 2, color: stockRed),
-              if (_isOwner && _branches.isNotEmpty)
+              if (_isOwner && LocationSettings.instance.loaded)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: BranchFilterChips(
-                    branches: _branches,
-                    selectedId: _branchFilter,
-                    onSelected: _selectBranch,
-                    showAll: false,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: BranchBadge(name: LocationSettings.instance.label),
                   ),
                 ),
               _buildSummaryRow(),
@@ -474,6 +489,8 @@ class _StockPageState extends State<StockPage> {
     );
   }
 
+  // Tab 1: Daftar stok
+
   Widget _buildStockTab() {
     if (!_itemsLoaded) {
       if (_itemsError != null) {
@@ -511,6 +528,8 @@ class _StockPageState extends State<StockPage> {
       ],
     );
   }
+
+  /// Tampilkan satu seksi sesuai kategori yang sedang dipilih.
   List<Widget> _buildSections() {
     final category = _effectiveCategory;
     final items = _visibleItems;
@@ -528,6 +547,7 @@ class _StockPageState extends State<StockPage> {
             child: StockItemCard(
               item: item,
               onTap: () => _openItemDetails(item),
+              branchLabel: _branchLabelFor(item.branchId),
             ),
           ),
         ),
@@ -573,6 +593,8 @@ class _StockPageState extends State<StockPage> {
       ),
     );
   }
+
+  // Tab 2: Riwayat
 
   Widget _buildHistoryTab() {
     return Column(
@@ -744,6 +766,10 @@ class _StockPageState extends State<StockPage> {
                 const SizedBox(height: 2),
                 Text(
                   [
+                    if (_isOwner &&
+                        _branchFilter == null &&
+                        movement.branchName.isNotEmpty)
+                      movement.branchName,
                     if (movement.message.isNotEmpty) movement.message,
                     movement.person,
                     stockFormatDateTime(movement.time),

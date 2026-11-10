@@ -16,6 +16,7 @@ class AppData extends ChangeNotifier {
   bool _loading = false;
   bool _loaded = false;
   String? _error;
+  int? _branchFilter;
 
   int _generation = 0;
   List<BusWash> get buses => List.unmodifiable(_buses);
@@ -26,17 +27,18 @@ class AppData extends ChangeNotifier {
   bool get loading => _loading;
   bool get loaded => _loaded;
   String? get error => _error;
+  int? get branchFilter => _branchFilter;
 
-  Future<void> refresh() async {
-    if (_loading) return;
+  Future<void> refresh({bool force = false}) async {
+    if (_loading && !force) return;
 
-    final gen = _generation;
+    final gen = ++_generation;
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final list = await JobService.instance.fetchJobs();
+      final list = await JobService.instance.fetchJobs(branchId: _branchFilter);
       if (gen != _generation) return;
 
       _buses = list;
@@ -55,6 +57,13 @@ class AppData extends ChangeNotifier {
     }
   }
 
+  Future<void> setBranchFilter(int? branchId) {
+    _branchFilter = branchId;
+    _buses = [];
+    _loaded = false;
+    return refresh(force: true);
+  }
+
   void addBus(BusWash bus) {
     _buses = [bus, ..._buses.where((b) => b.id != bus.id)];
     notifyListeners();
@@ -63,6 +72,7 @@ class AppData extends ChangeNotifier {
   void clear() {
     _generation++;
     _buses = [];
+    _branchFilter = null;
     _loading = false;
     _loaded = false;
     _error = null;

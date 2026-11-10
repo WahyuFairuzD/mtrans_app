@@ -27,6 +27,8 @@ class AttendanceRecord {
   final String userId;
   final int branchId;
   final AttendanceType type;
+
+  /// Selalu UTC. Tampilkan dengan wibTime() dari utils/wib.dart.
   final DateTime attendedAt;
   final String workDate;
   final double latitude;

@@ -12,6 +12,7 @@ import '../../widgets/load_notice.dart';
 import '../../widgets/stat_card.dart';
 import '../attendance/attendance_page.dart';
 import '../stock/stock_page.dart';
+import '../units/units_page.dart';
 import 'assign_page.dart';
 import 'input_bus_page.dart';
 import 'inspection_page.dart';
@@ -210,6 +211,14 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
               icon: Icons.inventory_2_outlined,
               iconColor: Colors.blue,
               onTap: () => _open(const StockPage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Kelola Unit',
+              subtitle: 'Jenis kendaraan, nama armada, dan plat',
+              icon: Icons.directions_bus_outlined,
+              iconColor: Colors.orange,
+              onTap: () => _open(const UnitsPage()),
             ),
             LoadNotice(
               loading: _appData.loading,

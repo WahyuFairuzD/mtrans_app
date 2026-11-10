@@ -29,6 +29,8 @@ const List<String> _months = [
 ];
 
 String formatDay(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+// Batas hari dalam WIB (UTC+7), dikirim ke server sebagai waktu UTC.
 DateTime _dayStartUtc(DateTime wibDay) =>
     DateTime.utc(
       wibDay.year,
@@ -79,10 +81,26 @@ class HistoryFilter {
     );
   }
 
+  /// Salinan dengan cabang diganti (null = semua cabang).
+  /// Dipakai Owner: cabang mengikuti Setting > Lokasi, bukan panel filter.
+  HistoryFilter withBranch(int? value) {
+    return HistoryFilter(
+      preset: preset,
+      customFrom: customFrom,
+      customTo: customTo,
+      statuses: statuses,
+      branchId: value,
+      serviceTypeId: serviceTypeId,
+      pegawaiId: pegawaiId,
+      unitId: unitId,
+      query: query,
+    );
+  }
+
+  /// Filter di panel (tanpa kolom pencarian dan unit) sedang dipakai.
   bool get isActive =>
       preset != DatePreset.all ||
       statuses.isNotEmpty ||
-      branchId != null ||
       serviceTypeId != null ||
       pegawaiId != null;
 

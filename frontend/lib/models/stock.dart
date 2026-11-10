@@ -1,3 +1,4 @@
+/// Satu barang di daftar stok (stok dipisah per cabang).
 class StockItem {
   const StockItem({
     required this.id,

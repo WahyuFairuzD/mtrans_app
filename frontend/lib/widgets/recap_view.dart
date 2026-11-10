@@ -17,6 +17,7 @@ String formatMinutes(double? minutes) {
   return h > 0 ? '$h j $m m' : '$m m';
 }
 
+/// Rekap operasional untuk filter yang sedang dipilih.
 class RecapView extends StatefulWidget {
   final HistoryFilter filter;
 

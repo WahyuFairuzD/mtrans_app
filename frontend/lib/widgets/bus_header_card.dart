@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/bus_wash.dart';
 import '../theme/app_theme.dart';
 
+/// Kotak hitam berisi ikon bus.
 class BusIconBadge extends StatelessWidget {
   const BusIconBadge({super.key});
 
@@ -19,6 +20,8 @@ class BusIconBadge extends StatelessWidget {
   }
 }
 
+/// Kartu ringkas bus (plat, merek, layanan) di bagian atas halaman kerja,
+/// penugasan, dan pemeriksaan.
 class BusHeaderCard extends StatelessWidget {
   const BusHeaderCard({super.key, required this.bus, this.extraLines = const []});
 

@@ -4,6 +4,7 @@ import '../../models/app_user.dart';
 import '../../models/bus_wash.dart';
 import '../../models/history_filter.dart';
 import '../../services/auth_service.dart';
+import '../../services/location_settings.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/history_filter_sheet.dart';
 import '../../widgets/paged_bus_list.dart';
@@ -23,9 +24,31 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
 
   HistoryFilter _filter = const HistoryFilter();
 
+  /// Owner: tunggu pilihan lokasi (Setting) termuat dulu supaya daftar tidak dimuat dua kali.
+  bool _ready = false;
+
   UserRole? get _role => AuthService.instance.user?.role;
   bool get _isPegawai => _role == UserRole.pegawai;
   bool get _isOwner => _role == UserRole.owner;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isOwner) {
+      LocationSettings.instance
+          .ensureLoaded()
+          .catchError((_) {})
+          .whenComplete(() {
+            if (mounted) setState(() => _ready = true);
+          });
+    } else {
+      _ready = true;
+    }
+  }
+
+  /// Owner: cabang mengikuti Setting > Lokasi. Peran lain: dikunci server.
+  HistoryFilter get _effectiveFilter =>
+      _isOwner ? _filter.withBranch(LocationSettings.instance.branchId) : _filter;
 
   @override
   void dispose() {
@@ -47,7 +70,6 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
       context,
       current: _filter,
       canFilterMaster: !_isPegawai,
-      canFilterBranch: _isOwner,
     );
 
     if (result == null || !mounted) return;
@@ -121,8 +143,16 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Riwayat Pencucian')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final filter = _effectiveFilter;
     final list = PagedBusList(
-      filter: _filter,
+      filter: filter,
       onUnitHistory: _isPegawai ? null : _openUnit,
       showBranch: _isOwner,
     );
@@ -155,7 +185,7 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
           children: [
             _buildSearchBar(),
             Expanded(
-              child: TabBarView(children: [list, RecapView(filter: _filter)]),
+              child: TabBarView(children: [list, RecapView(filter: filter)]),
             ),
           ],
         ),

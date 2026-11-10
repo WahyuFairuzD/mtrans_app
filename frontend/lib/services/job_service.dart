@@ -11,9 +11,15 @@ class JobService {
 
   Dio get _dio => ApiClient.dio;
 
-  Future<List<BusWash>> fetchJobs({int limit = 100}) async {
+  Future<List<BusWash>> fetchJobs({int limit = 100, int? branchId}) async {
     try {
-      final res = await _dio.get('/jobs', queryParameters: {'limit': limit});
+      final res = await _dio.get(
+        '/jobs',
+        queryParameters: {
+          'limit': limit,
+          if (branchId != null) 'branch_id': branchId,
+        },
+      );
       final body = res.data as Map<String, dynamic>;
       return (body['data'] as List)
           .cast<Map<String, dynamic>>()
