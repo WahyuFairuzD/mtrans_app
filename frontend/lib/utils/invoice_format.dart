@@ -15,11 +15,9 @@ const _monthNames = [
   'Desember',
 ];
 
-/// "24 September 2026"
 String formatLongDate(DateTime d) =>
     '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
 
-/// "2026-09-24" (format tanggal untuk API).
 String isoDate(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-'
     '${d.month.toString().padLeft(2, '0')}-'

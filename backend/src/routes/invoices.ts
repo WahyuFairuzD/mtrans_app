@@ -17,7 +17,6 @@ import {
   getInvoiceSignature,
   invoiceNotFound,
   listInvoices,
-  markInvoicePaid,
   previewInvoice,
   voidInvoice,
 } from '../services/invoices.service'
@@ -30,7 +29,7 @@ invoices.use('*', requireRole('owner'))
 
 const MAX_SIGNATURE_BYTES = 512 * 1024
 const MAX_INVOICE_NUMBER = 999_999
-const STATUSES = ['terbit', 'lunas', 'batal']
+const STATUSES = ['terbit', 'batal']
 
 function isPng(bytes: ArrayBuffer): boolean {
   if (bytes.byteLength < 8) return false
@@ -52,7 +51,7 @@ invoices.get('/preview', async (c) => {
 invoices.get('/', async (c) => {
   const status = c.req.query('status')
   if (status && !STATUSES.includes(status)) {
-    throw new ValidationError('Status harus terbit, lunas, atau batal.')
+    throw new ValidationError('Status harus terbit atau batal.')
   }
   const limit = intQuery(c.req.query('limit'), 'Limit', 50, 1, 100)
   const offset = intQuery(c.req.query('offset'), 'Offset', 0, 0, 1_000_000)
@@ -129,12 +128,6 @@ invoices.post('/:id/void', async (c) => {
   const id = requireUuid(c.req.param('id'), invoiceNotFound)
   const invoice = await voidInvoice(adminClient(c.env), c.get('user'), id)
   return c.json({ message: 'Invoice dibatalkan.', invoice })
-})
-
-invoices.post('/:id/paid', async (c) => {
-  const id = requireUuid(c.req.param('id'), invoiceNotFound)
-  const invoice = await markInvoicePaid(adminClient(c.env), id)
-  return c.json({ message: 'Invoice ditandai lunas.', invoice })
 })
 
 export default invoices

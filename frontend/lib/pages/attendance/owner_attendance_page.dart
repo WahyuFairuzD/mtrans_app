@@ -8,6 +8,15 @@ import '../../theme/app_theme.dart';
 import '../../utils/invoice_format.dart';
 import '../../utils/wib.dart';
 import '../../widgets/attendance_widgets.dart';
+import 'attendance_person_page.dart';
+
+typedef _Entry = ({AttendancePerson person, List<AttendanceRecord> records});
+
+/// Hasil bottom sheet pemilih: [person] null berarti "Semua pegawai".
+class _PersonPick {
+  const _PersonPick(this.person);
+  final AttendancePerson? person;
+}
 
 class OwnerAttendancePage extends StatefulWidget {
   const OwnerAttendancePage({super.key});
@@ -16,16 +25,19 @@ class OwnerAttendancePage extends StatefulWidget {
 }
 
 class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
-  /// Foto absensi dihapus otomatis dari penyimpanan setelah 28 hari.
   static const _photoRetentionDays = 28;
 
   final _service = AttendanceService.instance;
   List<AttendanceRecord> _records = [];
+  List<AttendancePerson> _people = [];
+  AttendancePerson? _person;
   late DateTime _today;
   late DateTime _date;
   bool _ready = false;
   bool _loading = true;
+  bool _peopleLoading = false;
   String? _error;
+  String? _peopleError;
 
   @override
   void initState() {
@@ -45,7 +57,7 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
     }
     if (!mounted) return;
     setState(() => _ready = true);
-    await _load();
+    await Future.wait([_load(), _loadPeople()]);
   }
 
   Future<void> _load() async {
@@ -69,6 +81,28 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
     }
   }
 
+  Future<void> _loadPeople() async {
+    setState(() {
+      _peopleLoading = true;
+      _peopleError = null;
+    });
+    try {
+      final people = await _service.fetchPeople(
+        branchId: LocationSettings.instance.branchId,
+      );
+      if (!mounted) return;
+      setState(() => _people = people);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _peopleError = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _peopleError = 'Gagal memuat daftar pegawai.');
+    } finally {
+      if (mounted) setState(() => _peopleLoading = false);
+    }
+  }
+
+  Future<void> _refreshAll() => Future.wait([_load(), _loadPeople()]);
+
   void _goTo(DateTime date) {
     if (date.isAfter(_today)) return;
     setState(() => _date = date);
@@ -88,17 +122,61 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
     }
   }
 
+  Future<void> _pickPerson() async {
+    final result = await showModalBottomSheet<_PersonPick>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) =>
+          _PersonPickerSheet(people: _people, selectedId: _person?.id),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _person = result.person);
+  }
+
+  void _openPerson(AttendancePerson person) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => AttendancePersonPage(person: person)),
+    );
+  }
+
   bool get _isToday => _date == _today;
 
   bool get _photosExpired =>
       _today.difference(_date).inDays > _photoRetentionDays;
 
-  Map<String, List<AttendanceRecord>> get _grouped {
+  List<_Entry> get _entries {
+    final selected = _person;
+    if (selected != null) {
+      return [
+        (
+          person: selected,
+          records: _records.where((r) => r.userId == selected.id).toList(),
+        ),
+      ];
+    }
+
     final grouped = <String, List<AttendanceRecord>>{};
     for (final record in _records) {
       grouped.putIfAbsent(record.userId, () => []).add(record);
     }
-    return grouped;
+    final entries = grouped.values.map<_Entry>((records) {
+      final first = records.first;
+      return (
+        person: AttendancePerson(
+          id: first.userId,
+          fullName: first.fullName,
+          role: first.role,
+        ),
+        records: records,
+      );
+    }).toList();
+    entries.sort((a, b) => a.person.fullName.compareTo(b.person.fullName));
+    return entries;
   }
 
   int _countType(AttendanceType type) => _records
@@ -109,16 +187,13 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final grouped = _grouped.entries.toList()
-      ..sort(
-        (a, b) => a.value.first.fullName.compareTo(b.value.first.fullName),
-      );
+    final entries = _entries;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Absensi'),
         actions: [
           IconButton(
-            onPressed: _ready ? _load : null,
+            onPressed: _ready ? _refreshAll : null,
             icon: const Icon(Icons.refresh),
             tooltip: 'Muat ulang',
           ),
@@ -129,6 +204,7 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
           : Column(
               children: [
                 _buildDateBar(),
+                _buildPersonBar(),
                 if (_loading) const LinearProgressIndicator(minHeight: 2),
                 if (_error != null)
                   Padding(
@@ -142,33 +218,35 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
                   child: _loading && _records.isEmpty
                       ? const Center(child: CircularProgressIndicator())
                       : RefreshIndicator(
-                          onRefresh: _load,
+                          onRefresh: _refreshAll,
                           child: ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.all(16),
                             children: [
                               if (_photosExpired) _buildExpiredNote(),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _SummaryCard(
-                                      label: 'Sudah Masuk',
-                                      value: _countType(AttendanceType.masuk),
-                                      icon: Icons.login,
+                              if (_person == null) ...[
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _SummaryCard(
+                                        label: 'Sudah Masuk',
+                                        value: _countType(AttendanceType.masuk),
+                                        icon: Icons.login,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: _SummaryCard(
-                                      label: 'Sudah Pulang',
-                                      value: _countType(AttendanceType.pulang),
-                                      icon: Icons.logout,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _SummaryCard(
+                                        label: 'Sudah Pulang',
+                                        value: _countType(AttendanceType.pulang),
+                                        icon: Icons.logout,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              if (grouped.isEmpty)
+                                  ],
+                                ),
+                                const SizedBox(height: 20),
+                              ],
+                              if (entries.isEmpty)
                                 const Padding(
                                   padding: EdgeInsets.only(top: 36),
                                   child: Text(
@@ -180,9 +258,11 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
                                   ),
                                 )
                               else
-                                ...grouped.map(
+                                ...entries.map(
                                   (entry) => _EmployeeAttendanceCard(
-                                    records: entry.value,
+                                    person: entry.person,
+                                    records: entry.records,
+                                    onTap: () => _openPerson(entry.person),
                                   ),
                                 ),
                             ],
@@ -262,6 +342,54 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
     );
   }
 
+  Widget _buildPersonBar() {
+    final person = _person;
+
+    String label;
+    VoidCallback? onTap = _pickPerson;
+    if (_peopleLoading) {
+      label = 'Memuat daftar pegawai...';
+      onTap = null;
+    } else if (_peopleError != null) {
+      label = 'Gagal memuat. Ketuk untuk coba lagi';
+      onTap = _loadPeople;
+    } else {
+      label = person?.fullName ?? 'Semua pegawai';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onTap,
+              icon: const Icon(Icons.person_search_outlined, size: 18),
+              label: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(label, overflow: TextOverflow.ellipsis),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.black87,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: AppColors.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+          if (person != null)
+            IconButton(
+              tooltip: 'Tampilkan semua pegawai',
+              onPressed: () => setState(() => _person = null),
+              icon: const Icon(Icons.close),
+            )
+          else
+            const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
   Widget _buildExpiredNote() {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -273,6 +401,110 @@ class _OwnerAttendancePageState extends State<OwnerAttendancePage> {
       child: Text(
         'Foto absensi lebih dari $_photoRetentionDays hari sudah dihapus otomatis. Catatan jam dan lokasi tetap tersimpan.',
         style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+      ),
+    );
+  }
+}
+
+class _PersonPickerSheet extends StatefulWidget {
+  const _PersonPickerSheet({required this.people, required this.selectedId});
+
+  final List<AttendancePerson> people;
+  final String? selectedId;
+
+  @override
+  State<_PersonPickerSheet> createState() => _PersonPickerSheetState();
+}
+
+class _PersonPickerSheetState extends State<_PersonPickerSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final people = query.isEmpty
+        ? widget.people
+        : widget.people
+              .where((p) => p.fullName.toLowerCase().contains(query))
+              .toList();
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Pilih pegawai',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: TextField(
+                  onChanged: (value) => setState(() => _query = value),
+                  decoration: filledInputDecoration('Cari nama').copyWith(
+                    prefixIcon: const Icon(Icons.search),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  children: [
+                    if (query.isEmpty)
+                      ListTile(
+                        leading: const CircleAvatar(
+                          child: Icon(Icons.groups_outlined),
+                        ),
+                        title: const Text('Semua pegawai'),
+                        trailing: widget.selectedId == null
+                            ? const Icon(Icons.check, color: AppColors.brand)
+                            : null,
+                        onTap: () => Navigator.pop(context, const _PersonPick(null)),
+                      ),
+                    for (final person in people)
+                      ListTile(
+                        leading: const CircleAvatar(
+                          child: Icon(Icons.person_outline),
+                        ),
+                        title: Text(person.fullName),
+                        subtitle: Text(attendanceRoleLabel(person.role)),
+                        trailing: widget.selectedId == person.id
+                            ? const Icon(Icons.check, color: AppColors.brand)
+                            : null,
+                        onTap: () => Navigator.pop(context, _PersonPick(person)),
+                      ),
+                    if (people.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text(
+                          'Tidak ada pegawai yang cocok.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -326,8 +558,14 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _EmployeeAttendanceCard extends StatelessWidget {
-  const _EmployeeAttendanceCard({required this.records});
+  const _EmployeeAttendanceCard({
+    required this.person,
+    required this.records,
+    required this.onTap,
+  });
+  final AttendancePerson person;
   final List<AttendanceRecord> records;
+  final VoidCallback onTap;
 
   AttendanceRecord? _byType(AttendanceType type) {
     for (final record in records) {
@@ -336,69 +574,82 @@ class _EmployeeAttendanceCard extends StatelessWidget {
     return null;
   }
 
-  String _time(AttendanceRecord? record) =>
-      record == null ? 'Belum pulang' : wibTime(record.attendedAt);
+  String _time(AttendanceRecord? record, String empty) =>
+      record == null ? empty : wibTime(record.attendedAt);
 
   @override
   Widget build(BuildContext context) {
     final checkIn = _byType(AttendanceType.masuk);
     final checkOut = _byType(AttendanceType.pulang);
-    final first = records.first;
+    final role = attendanceRoleLabel(person.role);
+    final subtitle = records.isEmpty ? role : '$role · ${records.first.branchName}';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const CircleAvatar(child: Icon(Icons.person_outline)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        first.fullName,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '${first.role == 'pengawas' ? 'Pengawas' : 'Petugas Cuci'} · ${first.branchName}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const CircleAvatar(child: Icon(Icons.person_outline)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          person.fullName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textSecondary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _OwnerTimeRow(label: 'Masuk', value: _time(checkIn, 'Belum masuk')),
+              const SizedBox(height: 6),
+              _OwnerTimeRow(
+                label: 'Pulang',
+                value: _time(checkOut, 'Belum pulang'),
+              ),
+              if (checkIn != null) ...[
+                const Divider(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PhotoColumn(label: 'Foto Masuk', record: checkIn),
+                    ),
+                    if (checkOut != null) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _PhotoColumn(
+                          label: 'Foto Pulang',
+                          record: checkOut,
                         ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            _OwnerTimeRow(label: 'Masuk', value: _time(checkIn)),
-            const SizedBox(height: 6),
-            _OwnerTimeRow(label: 'Pulang', value: _time(checkOut)),
-            if (checkIn != null) ...[
-              const Divider(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PhotoColumn(label: 'Foto Masuk', record: checkIn),
-                  ),
-                  if (checkOut != null) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _PhotoColumn(
-                        label: 'Foto Pulang',
-                        record: checkOut,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -446,7 +697,7 @@ class _OwnerTimeRow extends StatelessWidget {
         value,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          color: value == 'Belum pulang'
+          color: value.startsWith('Belum')
               ? Colors.orange.shade800
               : Colors.black87,
         ),

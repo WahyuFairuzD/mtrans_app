@@ -47,6 +47,45 @@ class AttendanceService {
     }
   }
 
+  /// Owner: daftar pegawai dan pengawas aktif, opsional per cabang.
+  Future<List<AttendancePerson>> fetchPeople({int? branchId}) async {
+    try {
+      final response = await _dio.get(
+        '/attendance/people',
+        queryParameters: {if (branchId != null) 'branch_id': branchId},
+      );
+      final body = response.data as Map<String, dynamic>;
+      return (body['data'] as List)
+          .cast<Map<String, dynamic>>()
+          .map(AttendancePerson.fromJson)
+          .toList();
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  /// Owner: riwayat absensi satu orang pada rentang tanggal (maks. 120 hari).
+  Future<List<AttendanceRecord>> fetchUserRange({
+    required String userId,
+    required DateTime from,
+    required DateTime to,
+    int? branchId,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/attendance/user/$userId',
+        queryParameters: {
+          'from': isoDate(from),
+          'to': isoDate(to),
+          if (branchId != null) 'branch_id': branchId,
+        },
+      );
+      return _records(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<AttendanceRecord> submit({
     required AttendanceType type,
     required int branchId,

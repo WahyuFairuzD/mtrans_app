@@ -116,13 +116,9 @@ class InvoiceService {
     }
   }
 
-  Future<Invoice> voidInvoice(String id) => _action(id, 'void');
-
-  Future<Invoice> markPaid(String id) => _action(id, 'paid');
-
-  Future<Invoice> _action(String id, String action) async {
+  Future<Invoice> voidInvoice(String id) async {
     try {
-      final res = await _dio.post('/invoices/$id/$action');
+      final res = await _dio.post('/invoices/$id/void');
       final body = res.data as Map<String, dynamic>;
       return Invoice.fromJson(body['invoice'] as Map<String, dynamic>);
     } on DioException catch (e) {

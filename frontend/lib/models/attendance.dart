@@ -7,6 +7,31 @@ enum AttendanceType {
   final String label;
 }
 
+/// "Pengawas" atau "Petugas Cuci" dari nilai role di server.
+String attendanceRoleLabel(String role) =>
+    role == 'pengawas' ? 'Pengawas' : 'Petugas Cuci';
+
+/// Pegawai/pengawas yang bisa dipilih Owner di halaman absensi.
+class AttendancePerson {
+  const AttendancePerson({
+    required this.id,
+    required this.fullName,
+    required this.role,
+  });
+
+  final String id;
+  final String fullName;
+  final String role;
+
+  factory AttendancePerson.fromJson(Map<String, dynamic> json) {
+    return AttendancePerson(
+      id: json['id'] as String,
+      fullName: (json['full_name'] as String?) ?? '',
+      role: (json['role'] as String?) ?? '',
+    );
+  }
+}
+
 class AttendanceRecord {
   const AttendanceRecord({
     required this.id,

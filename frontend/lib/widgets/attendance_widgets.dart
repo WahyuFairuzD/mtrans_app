@@ -8,7 +8,6 @@ import '../services/attendance_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/wib.dart';
 
-/// Foto absensi dari R2. Diunduh lewat API (butuh token) lalu di-cache di memori.
 class AttendancePhotoImage extends StatelessWidget {
   const AttendancePhotoImage({
     super.key,

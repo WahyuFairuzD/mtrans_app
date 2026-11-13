@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/invoice.dart';
 
-/// Label status invoice (Terbit / Lunas / Batal).
+/// Label status invoice (Terbit / Batal).
 class InvoiceStatusChip extends StatelessWidget {
   const InvoiceStatusChip({super.key, required this.status});
 
