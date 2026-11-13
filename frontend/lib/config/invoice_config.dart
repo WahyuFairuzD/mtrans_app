@@ -1,4 +1,3 @@
-/// Data tetap di invoice. Ubah di sini bila alamat atau rekening berganti.
 class InvoiceConfig {
   InvoiceConfig._();
 
@@ -29,7 +28,5 @@ class InvoiceConfig {
   static const closingText =
       'Demikian tagihan ini saya sampaikan. Atas perhatian dan kerja samanya, saya ucapkan terima kasih.';
   static const thanksText = 'Terimakasih atas Kerjasamanya';
-
-  /// Jatuh tempo default = tanggal invoice + sekian hari.
   static const defaultDueDays = 7;
 }

@@ -12,8 +12,6 @@ import '../../widgets/error_state.dart';
 
 enum _DayStatus { none, partial, complete }
 
-/// Riwayat absensi satu orang: grid ala contribution graph GitHub (3 bulan).
-/// Ketuk kotak untuk melihat jam, lokasi, dan foto pada hari itu.
 class AttendancePersonPage extends StatefulWidget {
   const AttendancePersonPage({super.key, required this.person});
 
@@ -106,6 +104,17 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
     }
   }
 
+  Color _chipColorOf(_DayStatus status) {
+    switch (status) {
+      case _DayStatus.complete:
+        return Colors.green.shade700;
+      case _DayStatus.partial:
+        return Colors.orange.shade800;
+      case _DayStatus.none:
+        return AppColors.textSecondary;
+    }
+  }
+
   String _labelOf(_DayStatus status) {
     switch (status) {
       case _DayStatus.complete:
@@ -181,16 +190,21 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
                 Text(
                   formatLongDate(day),
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _labelOf(status),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: AttendanceChip(
+                    label: _labelOf(status),
+                    color: _chipColorOf(status),
+                    icon: status == _DayStatus.complete
+                        ? Icons.check_circle_outline
+                        : status == _DayStatus.partial
+                        ? Icons.timelapse
+                        : Icons.event_busy_outlined,
                   ),
                 ),
                 if (records.isEmpty)
@@ -210,12 +224,25 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
                         color: Colors.orange.shade50,
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(
-                        'Foto absensi lebih dari $_photoRetentionDays hari sudah dihapus otomatis. Catatan jam dan lokasi tetap tersimpan.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange.shade900,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.orange.shade900,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Foto absensi lebih dari $_photoRetentionDays hari sudah dihapus otomatis. Catatan jam dan lokasi tetap tersimpan.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   for (final record in records)
@@ -354,7 +381,9 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
             decoration: BoxDecoration(
               color: _colorOf(status),
               borderRadius: BorderRadius.circular(4),
-              border: isToday ? Border.all(color: Colors.black87, width: 1.5) : null,
+              border: isToday
+                  ? Border.all(color: Colors.black87, width: 1.5)
+                  : null,
             ),
           ),
         ),
@@ -405,29 +434,45 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            attendanceRoleLabel(widget.person.role),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 2),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              const Icon(
-                Icons.location_on_outlined,
-                size: 14,
+              AttendanceChip(
+                icon: Icons.badge_outlined,
+                label: attendanceRoleLabel(widget.person.role),
+                color: AppColors.brand,
+              ),
+              AttendanceChip(
+                icon: Icons.location_on_outlined,
+                label: LocationSettings.instance.label,
                 color: AppColors.textSecondary,
               ),
-              const SizedBox(width: 4),
-              Text(
-                LocationSettings.instance.label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.check_circle_outline,
+                  color: Colors.green.shade700,
+                  value: counts.complete,
+                  label: 'Hari lengkap',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatTile(
+                  icon: Icons.timelapse,
+                  color: Colors.orange.shade800,
+                  value: counts.partial,
+                  label: 'Belum lengkap',
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -438,9 +483,9 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${counts.complete} hari lengkap · ${counts.partial} hari belum lengkap',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                const Text(
+                  '3 bulan terakhir',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
                 _buildGrid(),
@@ -458,13 +503,86 @@ class _AttendancePersonPageState extends State<AttendancePersonPage> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Ketuk kotak tanggal untuk melihat jam, lokasi, dan foto absensi. '
-            'Foto yang lebih dari $_photoRetentionDays hari sudah dihapus otomatis.',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 16,
+                child: Icon(
+                  Icons.touch_app_outlined,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Ketuk kotak tanggal untuk melihat jam, lokasi, jarak dari kantor, dan foto absensi. '
+                  'Foto yang lebih dari $_photoRetentionDays hari sudah dihapus otomatis.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.label,
+  });
+  final IconData icon;
+  final Color color;
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Row(
+      children: [
+        AttendanceIconBox(icon: icon, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$value',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
