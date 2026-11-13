@@ -10,7 +10,6 @@ import '../../widgets/invoice_status_chip.dart';
 import 'invoice_create_page.dart';
 import 'invoice_detail_page.dart';
 
-/// Riwayat invoice (Owner). Mengikuti pilihan lokasi di Setting.
 class InvoiceListPage extends StatefulWidget {
   const InvoiceListPage({super.key});
 
@@ -20,6 +19,9 @@ class InvoiceListPage extends StatefulWidget {
 
 class _InvoiceListPageState extends State<InvoiceListPage> {
   static const _pageSize = 50;
+
+  /// Filter status yang tersedia: Terbit dan Batal (selain "Semua").
+  static const _filterStatuses = [InvoiceStatus.terbit, InvoiceStatus.batal];
 
   final ScrollController _scroll = ScrollController();
 
@@ -204,7 +206,7 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         children: [
           chip('Semua', null),
-          for (final status in InvoiceStatus.values) chip(status.label, status),
+          for (final status in _filterStatuses) chip(status.label, status),
         ],
       ),
     );

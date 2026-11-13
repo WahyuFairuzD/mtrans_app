@@ -1,8 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import '../../config/invoice_config.dart';
 import '../../models/invoice.dart';
 import '../../services/api_exception.dart';
@@ -16,7 +13,6 @@ import '../../utils/invoice_format.dart';
 import '../../widgets/error_state.dart';
 import '../../widgets/invoice_status_chip.dart';
 
-/// Detail satu invoice: ringkasan, bagikan PDF atau Excel, tandai lunas, batalkan.
 class InvoiceDetailPage extends StatefulWidget {
   const InvoiceDetailPage({
     super.key,
@@ -100,10 +96,80 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
-  Future<void> _sharePdf(BuildContext buttonContext, Invoice invoice) {
-    return _run(() async {
+  /// Tanya apakah PDF memakai tanda tangan. Null = dibatalkan.
+  Future<bool?> _askSignature() {
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Bagikan PDF',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Pilih apakah PDF memakai tanda tangan.',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(sheetContext, true),
+                icon: const Icon(Icons.gesture),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Dengan tanda tangan'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(sheetContext, false),
+                icon: const Icon(Icons.print_outlined),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('Tanpa tanda tangan (untuk ttd basah)'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Tanpa tanda tangan, nama penanda tangan dan ruang kosongnya tetap ada di PDF.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sharePdf(BuildContext buttonContext, Invoice invoice) async {
+    if (_busy) return;
+
+    final withSignature = await _askSignature();
+    if (withSignature == null || !mounted || !buttonContext.mounted) return;
+
+    await _run(() async {
       final logo = (await rootBundle.load(InvoiceConfig.logoAsset)).buffer.asUint8List();
-      final signature = await _signature(invoice);
+      final signature = withSignature ? await _signature(invoice) : null;
       final bytes = await InvoicePdf.build(invoice, logo: logo, signature: signature);
 
       if (!buttonContext.mounted) return;
@@ -130,21 +196,6 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         subject: 'Invoice ${invoiceNumberLabel(invoice.number)}',
       );
     }, 'Gagal membuat Excel. Coba lagi.');
-  }
-
-  Future<void> _markPaid(Invoice invoice) async {
-    final ok = await confirmDialog(
-      context,
-      title: 'Tandai lunas?',
-      message: 'Invoice ${invoiceNumberLabel(invoice.number)} ditandai sudah dibayar.',
-      confirmLabel: 'Tandai Lunas',
-    );
-    if (!ok || !mounted) return;
-
-    await _run(() async {
-      final updated = await InvoiceService.instance.markPaid(invoice.id);
-      if (mounted) setState(() => _invoice = updated);
-    }, 'Gagal menandai lunas. Coba lagi.');
   }
 
   Future<void> _void(Invoice invoice) async {
@@ -257,15 +308,6 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         ],
         if (invoice.status == InvoiceStatus.terbit) ...[
           const SizedBox(height: 20),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : () => _markPaid(invoice),
-            icon: const Icon(Icons.check_circle_outline),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Tandai Lunas'),
-            ),
-          ),
-          const SizedBox(height: 8),
           TextButton.icon(
             onPressed: _busy ? null : () => _void(invoice),
             style: TextButton.styleFrom(foregroundColor: Colors.red),

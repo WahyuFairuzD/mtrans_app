@@ -17,6 +17,12 @@ export type AttendanceInput = {
   photo: ArrayBuffer
 }
 
+export type AttendancePerson = {
+  id: string
+  full_name: string
+  role: string
+}
+
 type AttendanceRow = {
   id: string
   user_id: string
@@ -70,6 +76,41 @@ export async function listForDate(db: Db, date: string, branchId?: number) {
 
   const { data, error } = await query
   if (error) throw internal(error, 'Gagal mengambil absensi hari ini.')
+  return ((data ?? []) as unknown as AttendanceRow[]).map(toDto)
+}
+
+/**
+ * Daftar pegawai dan pengawas aktif untuk pemilih di aplikasi Owner.
+ * Tanpa cabang: semua. Dengan cabang: pengawas cabang itu dan siapa pun
+ * yang pernah absen di cabang itu (lihat fungsi SQL attendance_people).
+ */
+export async function listPeople(db: Db, branchId?: number) {
+  const { data, error } = await db.rpc('attendance_people', {
+    p_branch_id: branchId ?? null,
+  })
+  if (error) throw internal(error, 'Gagal mengambil daftar pegawai.')
+  return (data ?? []) as AttendancePerson[]
+}
+
+/** Riwayat absensi satu orang pada rentang tanggal kerja (WIB), opsional per cabang. */
+export async function listForUser(
+  db: Db,
+  userId: string,
+  from: string,
+  to: string,
+  branchId?: number,
+) {
+  let query = db
+    .from('attendance')
+    .select(COLUMNS)
+    .eq('user_id', userId)
+    .gte('work_date', from)
+    .lte('work_date', to)
+    .order('attended_at', { ascending: true })
+  if (branchId !== undefined) query = query.eq('branch_id', branchId)
+
+  const { data, error } = await query
+  if (error) throw internal(error, 'Gagal mengambil riwayat absensi.')
   return ((data ?? []) as unknown as AttendanceRow[]).map(toDto)
 }
 

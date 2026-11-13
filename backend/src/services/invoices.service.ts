@@ -85,7 +85,7 @@ export async function previewInvoice(db: Db, branchId: number, from: string, to:
 }
 
 const LIST_COLUMNS =
-  'id, number, branch_id, period_start, period_end, invoice_date, due_date, status, total_amount, signer_name, created_at, paid_at, voided_at, branches(name)'
+  'id, number, branch_id, period_start, period_end, invoice_date, due_date, status, total_amount, signer_name, created_at, voided_at, branches(name)'
 
 type InvoiceRow = {
   id: string
@@ -227,26 +227,6 @@ export async function voidInvoice(db: Db, user: AuthUser, id: string) {
     if (error.code === 'P0002') throw invoiceNotFound()
     throw dbError(error, 'Gagal membatalkan invoice.')
   }
-  return getInvoice(db, id)
-}
-
-export async function markInvoicePaid(db: Db, id: string) {
-  const { data, error } = await db
-    .from('invoices')
-    .update({ status: 'lunas', paid_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('status', 'terbit')
-    .select('id')
-    .maybeSingle()
-  if (error) throw internal(error, 'Gagal menandai invoice lunas.')
-
-  if (!data) {
-    const exists = await db.from('invoices').select('id').eq('id', id).maybeSingle()
-    if (exists.error) throw internal(exists.error, 'Gagal menandai invoice lunas.')
-    if (!exists.data) throw invoiceNotFound()
-    throw conflict('Hanya invoice berstatus terbit yang bisa ditandai lunas.')
-  }
-
   return getInvoice(db, id)
 }
 

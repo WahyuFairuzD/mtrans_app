@@ -8,7 +8,6 @@ import '../../services/location_settings.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/history_filter_sheet.dart';
 import '../../widgets/paged_bus_list.dart';
-import '../../widgets/recap_view.dart';
 import 'unit_history_page.dart';
 
 class WashHistoryPage extends StatefulWidget {
@@ -143,52 +142,28 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    final appBar = AppBar(title: const Text('Riwayat Pencucian'));
+
     if (!_ready) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Riwayat Pencucian')),
+        appBar: appBar,
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    final filter = _effectiveFilter;
-    final list = PagedBusList(
-      filter: filter,
-      onUnitHistory: _isPegawai ? null : _openUnit,
-      showBranch: _isOwner,
-    );
-
-    if (_isPegawai) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Riwayat Pencucian')),
-        body: Column(
-          children: [
-            _buildSearchBar(),
-            Expanded(child: list),
-          ],
-        ),
-      );
-    }
-
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Riwayat Pencucian'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Riwayat'),
-              Tab(text: 'Rekap'),
-            ],
-          ),
-        ),
-        body: Column(
-          children: [
-            _buildSearchBar(),
-            Expanded(
-              child: TabBarView(children: [list, RecapView(filter: filter)]),
+    return Scaffold(
+      appBar: appBar,
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: PagedBusList(
+              filter: _effectiveFilter,
+              onUnitHistory: _isPegawai ? null : _openUnit,
+              showBranch: _isOwner,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

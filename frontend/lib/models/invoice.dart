@@ -3,7 +3,6 @@ import 'vehicle_type.dart';
 
 enum InvoiceStatus {
   terbit('terbit', 'Terbit', Colors.orange),
-  lunas('lunas', 'Lunas', Colors.green),
   batal('batal', 'Batal', Colors.red);
 
   const InvoiceStatus(this.apiValue, this.label, this.color);

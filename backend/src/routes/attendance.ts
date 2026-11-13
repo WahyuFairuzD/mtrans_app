@@ -15,7 +15,9 @@ import { requireAuth, requireRole } from '../middleware/auth'
 import {
   getAttendancePhoto,
   listForDate,
+  listForUser,
   listMine,
+  listPeople,
   submitAttendance,
   type AttendanceType,
 } from '../services/attendance.service'
@@ -26,6 +28,10 @@ attendance.use('*', requireAuth)
 
 const MAX_PHOTO_BYTES = 1024 * 1024
 const PHOTO_TOO_LARGE = 'Ukuran foto maksimal 1 MB.'
+
+// Grid riwayat per orang di aplikasi memakai 3 bulan (maks. 92 hari).
+const MAX_RANGE_DAYS = 120
+const DAY_MS = 86_400_000
 
 function isJpeg(bytes: ArrayBuffer): boolean {
   if (bytes.byteLength < 3) return false
@@ -44,6 +50,34 @@ attendance.get('/day', requireRole('owner'), async (c) => {
   const branchId = optionalBranchId(c.req.query('branch_id'))
   const data = await listForDate(adminClient(c.env), date, branchId)
   return c.json({ data, date })
+})
+
+// Owner: daftar pegawai dan pengawas aktif untuk pemilih nama, opsional per cabang.
+attendance.get('/people', requireRole('owner'), async (c) => {
+  const branchId = optionalBranchId(c.req.query('branch_id'))
+  const data = await listPeople(adminClient(c.env), branchId)
+  return c.json({ data })
+})
+
+// Owner: riwayat absensi satu orang (?from=YYYY-MM-DD&to=YYYY-MM-DD), opsional per cabang.
+attendance.get('/user/:id', requireRole('owner'), async (c) => {
+  const userId = requireUuid(c.req.param('id'), () =>
+    notFound('Pegawai tidak ditemukan.'),
+  )
+  const from = requiredIsoDate(c.req.query('from'), 'Tanggal awal')
+  const to = requiredIsoDate(c.req.query('to'), 'Tanggal akhir')
+  const branchId = optionalBranchId(c.req.query('branch_id'))
+
+  const days = (Date.parse(to) - Date.parse(from)) / DAY_MS
+  if (days < 0) {
+    throw new ValidationError('Tanggal awal tidak boleh setelah tanggal akhir.')
+  }
+  if (days > MAX_RANGE_DAYS) {
+    throw new ValidationError(`Rentang tanggal maksimal ${MAX_RANGE_DAYS} hari.`)
+  }
+
+  const data = await listForUser(adminClient(c.env), userId, from, to, branchId)
+  return c.json({ data, from, to })
 })
 
 // Sama seperti /day untuk hari ini (dipertahankan agar aplikasi lama tetap jalan).
@@ -112,7 +146,7 @@ attendance.post('/', requireRole('pegawai', 'pengawas'), async (c) => {
   )
 })
 
-// Didaftarkan terakhir supaya tidak bentrok dengan /me/today dan /today.
+// Didaftarkan terakhir supaya tidak bentrok dengan /me/today, /people, /user/:id dan /today.
 attendance.get('/:id/photo', async (c) => {
   const id = requireUuid(c.req.param('id'), () =>
     notFound('Absensi tidak ditemukan.'),
