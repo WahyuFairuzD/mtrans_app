@@ -19,12 +19,28 @@ class AttendanceService {
   Dio get _dio => ApiClient.dio;
 
   final Map<String, Future<Uint8List>> _photoCache = {};
+  Future<AttendanceOffices>? _officesCache;
 
   Future<List<AttendanceRecord>> fetchMyToday() async {
     try {
       final response = await _dio.get('/attendance/me/today');
       return _records(response.data as Map<String, dynamic>);
     } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
+  /// Titik kantor semua cabang + batas jarak absen. Di-cache selama aplikasi
+  /// berjalan karena koordinat kantor tidak berubah.
+  Future<AttendanceOffices> fetchOffices() =>
+      _officesCache ??= _loadOffices();
+
+  Future<AttendanceOffices> _loadOffices() async {
+    try {
+      final response = await _dio.get('/attendance/offices');
+      return AttendanceOffices.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      _officesCache = null;
       throw ApiException.fromDio(error);
     }
   }

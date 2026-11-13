@@ -1,7 +1,5 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import 'pages/auth/auth_gate.dart';
 import 'services/auth_service.dart';
 import 'theme/app_theme.dart';

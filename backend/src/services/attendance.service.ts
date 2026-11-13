@@ -1,5 +1,12 @@
 import { requireBranch } from '../lib/access'
 import { AppError, conflict, internal, notFound } from '../lib/errors'
+import {
+  ATTENDANCE_MAX_DISTANCE_M,
+  distanceMeters,
+  distanceToOffice,
+  findBranchOffice,
+  formatDistance,
+} from '../lib/offices'
 import type { Db } from '../lib/supabase'
 import { todayWib } from '../lib/time'
 import { ValidationError } from '../lib/validate'
@@ -41,14 +48,20 @@ type AttendanceRow = {
 const COLUMNS = `id, user_id, branch_id, type, attended_at, work_date, latitude, longitude, accuracy_m, photo_path,
   profiles!attendance_user_id_fkey(full_name, role), branches!attendance_branch_id_fkey(name)`
 
-/** photo_path (key R2) tidak dikirim ke klien. Foto diambil lewat GET /attendance/:id/photo. */
+/**
+ * photo_path (key R2) tidak dikirim ke klien. Foto diambil lewat GET /attendance/:id/photo.
+ * distance_m = jarak titik absen ke kantor cabang (meter, dibulatkan), dihitung ulang
+ * dari koordinat tersimpan sehingga data lama ikut mendapat nilainya.
+ */
 function toDto(row: AttendanceRow) {
   const { photo_path: _photoPath, profiles, branches, ...rest } = row
+  const distance = distanceToOffice(rest.branch_id, rest.latitude, rest.longitude)
   return {
     ...rest,
     full_name: profiles?.full_name ?? '',
     role: profiles?.role ?? '',
     branch_name: branches?.name ?? '',
+    distance_m: distance === null ? null : Math.round(distance),
     photo_url: `/attendance/${row.id}/photo`,
   }
 }
@@ -122,6 +135,31 @@ async function removeQuietly(bucket: R2Bucket, key: string) {
   }
 }
 
+/**
+ * Tolak absen bila posisi lebih dari ATTENDANCE_MAX_DISTANCE_M dari kantor cabang.
+ * Dipanggil sebelum foto diunggah ke R2 supaya absen yang ditolak tidak meninggalkan file.
+ */
+function assertWithinOffice(branchId: number, latitude: number, longitude: number) {
+  const office = findBranchOffice(branchId)
+  if (!office) {
+    throw new AppError(
+      500,
+      'OFFICE_NOT_CONFIGURED',
+      'Titik lokasi kantor cabang ini belum diatur. Hubungi administrator.',
+    )
+  }
+
+  const distance = distanceMeters(latitude, longitude, office.latitude, office.longitude)
+  if (distance > ATTENDANCE_MAX_DISTANCE_M) {
+    throw new AppError(
+      422,
+      'OUT_OF_RANGE',
+      `Kamu berada sekitar ${formatDistance(distance)} dari kantor ${office.name}. ` +
+        `Absen dan foto harus dilakukan di kantor (maksimal ${ATTENDANCE_MAX_DISTANCE_M} m).`,
+    )
+  }
+}
+
 export async function submitAttendance(
   db: Db,
   bucket: R2Bucket,
@@ -137,6 +175,8 @@ export async function submitAttendance(
     .maybeSingle()
   if (branchError) throw internal(branchError, 'Gagal memvalidasi cabang.')
   if (!branch) throw new ValidationError('Cabang tidak ditemukan.')
+
+  assertWithinOffice(branchId, input.latitude, input.longitude)
 
   const key = `attendance/${user.id}/${todayWib()}/${input.type}-${crypto.randomUUID()}.jpg`
 

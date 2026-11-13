@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { notFound, tooLarge } from '../lib/errors'
 import { requireUuid } from '../lib/http'
+import { ATTENDANCE_MAX_DISTANCE_M, BRANCH_OFFICES } from '../lib/offices'
 import { adminClient } from '../lib/supabase'
 import { todayWib } from '../lib/time'
 import {
@@ -42,6 +43,12 @@ function isJpeg(bytes: ArrayBuffer): boolean {
 attendance.get('/me/today', requireRole('pegawai', 'pengawas'), async (c) => {
   const data = await listMine(adminClient(c.env), c.get('user').id)
   return c.json({ data })
+})
+
+// Titik kantor tiap cabang + batas jarak absen. Dipakai aplikasi untuk cek jarak
+// sebelum membuka kamera; keputusan akhir tetap di POST /attendance.
+attendance.get('/offices', requireRole('pegawai', 'pengawas'), (c) => {
+  return c.json({ data: BRANCH_OFFICES, max_distance_m: ATTENDANCE_MAX_DISTANCE_M })
 })
 
 // Owner: absensi semua pegawai pada satu tanggal (?date=YYYY-MM-DD), opsional per cabang.
@@ -128,6 +135,7 @@ attendance.post('/', requireRole('pegawai', 'pengawas'), async (c) => {
   }
 
   // Pengawas memakai cabang akunnya. Petugas wajib memilih cabang.
+  // Jarak ke kantor cabang divalidasi di submitAttendance (maks. 100 m).
   const branchId =
     user.role === 'pengawas' ? undefined : requiredBranchId(form['branch_id'])
 
@@ -146,7 +154,7 @@ attendance.post('/', requireRole('pegawai', 'pengawas'), async (c) => {
   )
 })
 
-// Didaftarkan terakhir supaya tidak bentrok dengan /me/today, /people, /user/:id dan /today.
+// Didaftarkan terakhir supaya tidak bentrok dengan /me/today, /offices, /people, /user/:id dan /today.
 attendance.get('/:id/photo', async (c) => {
   const id = requireUuid(c.req.param('id'), () =>
     notFound('Absensi tidak ditemukan.'),

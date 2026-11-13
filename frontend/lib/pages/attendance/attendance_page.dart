@@ -95,6 +95,35 @@ class _AttendancePageState extends State<AttendancePage> {
     }
   }
 
+  /// Cek jarak ke kantor sebelum kamera dibuka supaya user langsung tahu
+  /// tanpa menunggu upload. Mengembalikan pesan bila di luar batas.
+  /// Bila daftar kantor gagal dimuat, dilewati: backend tetap memvalidasi.
+  Future<String?> _outOfRangeMessage(
+    int branchId,
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      final config = await _service.fetchOffices();
+      final office = config.officeOf(branchId);
+      if (office == null) return null;
+      final distance = distanceBetweenMeters(
+        latitude,
+        longitude,
+        office.latitude,
+        office.longitude,
+      );
+      if (distance <= config.maxDistanceM) return null;
+      return outOfRangeMessage(
+        officeName: office.name,
+        distanceM: distance,
+        maxM: config.maxDistanceM,
+      );
+    } on ApiException {
+      return null;
+    }
+  }
+
   Future<void> _submit(AttendanceType type) async {
     if (_busy) return;
     final branchId = _branchId;
@@ -110,6 +139,18 @@ class _AttendancePageState extends State<AttendancePage> {
     try {
       final position = await DeviceLocation.instance.currentPosition();
       if (!mounted) return;
+
+      final rangeMessage = await _outOfRangeMessage(
+        branchId,
+        position.latitude,
+        position.longitude,
+      );
+      if (!mounted) return;
+      if (rangeMessage != null) {
+        await showAttendanceOutOfRangeDialog(context, message: rangeMessage);
+        return;
+      }
+
       final photo = await Navigator.of(
         context,
       ).push<Uint8List>(MaterialPageRoute(builder: (_) => const CapturePage()));
@@ -132,8 +173,12 @@ class _AttendancePageState extends State<AttendancePage> {
       if (mounted) showSnack(context, error.message);
     } on ApiException catch (error) {
       if (mounted) {
-        showSnack(context, error.message);
-        if (error.statusCode == 409) _load();
+        if (error.code == 'OUT_OF_RANGE') {
+          await showAttendanceOutOfRangeDialog(context, message: error.message);
+        } else {
+          showSnack(context, error.message);
+          if (error.statusCode == 409) _load();
+        }
       }
     } catch (_) {
       if (mounted) showSnack(context, 'Absensi gagal disimpan. Coba lagi.');
@@ -187,7 +232,9 @@ class _AttendancePageState extends State<AttendancePage> {
                       ),
                     )
                   else if (_user?.role == UserRole.pengawas && branch == null)
-                    const _ErrorBox(message: _unassignedBranchMessage),
+                    const _ErrorBox(message: _unassignedBranchMessage)
+                  else if (branch != null)
+                    _RangeInfoBanner(branchName: branch.name),
                   _AttendanceStatusCard(
                     type: AttendanceType.masuk,
                     record: checkIn,
@@ -240,6 +287,35 @@ class _AttendancePageState extends State<AttendancePage> {
             ),
     );
   }
+}
+
+class _RangeInfoBanner extends StatelessWidget {
+  const _RangeInfoBanner({required this.branchName});
+  final String branchName;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.brand.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.info_outline, size: 18, color: AppColors.brand),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Absen dan foto harus dilakukan di kantor $branchName, '
+            'maksimal ${kAttendanceMaxDistanceM.round()} m dari titik kantor.',
+            style: const TextStyle(fontSize: 12.5),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _AttendanceStatusCard extends StatelessWidget {
