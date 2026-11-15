@@ -97,8 +97,10 @@ class BusWash {
       endTime: _time(j['finished_at']),
       inspectionTime: _time(j['inspected_at']),
       exitTime: _time(j['exited_at']),
+      // Sejak alur dipegang Pengawas, pelaksana = Pengawas yang memulai
+      // pekerjaan (data lama masih berisi Petugas), jadi labelnya netral.
       employees: names
-          .map((n) => Employee(name: n, role: 'Petugas Cuci'))
+          .map((n) => Employee(name: n, role: 'Pelaksana'))
           .toList(),
       initialNote: j['initial_condition_notes'] as String?,
       inspectionNote: _inspectionText(j),

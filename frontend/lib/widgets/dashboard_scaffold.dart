@@ -7,8 +7,6 @@ import 'settings_button.dart';
 const _logoAsset = 'assets/images/kpbputih.png';
 const _redDark = Color(0xFF9E1022);
 
-/// Kerangka dashboard semua peran: header merah (profil, logo, sapaan),
-/// tarik-untuk-muat-ulang, dan isi yang bisa digulir.
 class DashboardScaffold extends StatelessWidget {
   const DashboardScaffold({
     super.key,

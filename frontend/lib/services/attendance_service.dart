@@ -30,8 +30,23 @@ class AttendanceService {
     }
   }
 
-  /// Titik kantor semua cabang + batas jarak absen. Di-cache selama aplikasi
-  /// berjalan karena koordinat kantor tidak berubah.
+  /// Pegawai/Pengawas: riwayat absensi milik sendiri pada rentang tanggal
+  /// (maks. 120 hari), semua cabang.
+  Future<List<AttendanceRecord>> fetchMyRange({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/attendance/me/range',
+        queryParameters: {'from': isoDate(from), 'to': isoDate(to)},
+      );
+      return _records(response.data as Map<String, dynamic>);
+    } on DioException catch (error) {
+      throw ApiException.fromDio(error);
+    }
+  }
+
   Future<AttendanceOffices> fetchOffices() =>
       _officesCache ??= _loadOffices();
 

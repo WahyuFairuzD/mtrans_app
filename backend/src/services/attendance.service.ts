@@ -135,10 +135,6 @@ async function removeQuietly(bucket: R2Bucket, key: string) {
   }
 }
 
-/**
- * Tolak absen bila posisi lebih dari ATTENDANCE_MAX_DISTANCE_M dari kantor cabang.
- * Dipanggil sebelum foto diunggah ke R2 supaya absen yang ditolak tidak meninggalkan file.
- */
 function assertWithinOffice(branchId: number, latitude: number, longitude: number) {
   const office = findBranchOffice(branchId)
   if (!office) {

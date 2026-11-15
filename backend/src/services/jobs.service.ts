@@ -205,7 +205,6 @@ export async function getJob(db: Db, user: AuthUser, id: string) {
 
 export type AssignInput = {
   pegawaiIds: string[]
-  /** null = pertahankan instruksi lama. '' = hapus instruksi. */
   instructions: string | null
 }
 

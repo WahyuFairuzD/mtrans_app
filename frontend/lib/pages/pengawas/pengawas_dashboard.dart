@@ -3,6 +3,7 @@ import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
 import '../../services/app_data.dart';
 import '../../services/review_service.dart';
+import '../../services/work_service.dart';
 import '../../utils/dialogs.dart';
 import '../../widgets/bus_card.dart';
 import '../../widgets/dashboard_scaffold.dart';
@@ -13,9 +14,9 @@ import '../../widgets/stat_card.dart';
 import '../attendance/attendance_page.dart';
 import '../stock/stock_page.dart';
 import '../units/units_page.dart';
-import 'assign_page.dart';
 import 'input_bus_page.dart';
 import 'inspection_page.dart';
+import 'work_page.dart';
 
 class PengawasDashboard extends StatefulWidget {
   const PengawasDashboard({super.key});
@@ -41,6 +42,16 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
   List<BusWash> _by(WashStatus status) =>
       _appData.operational.where((bus) => bus.status == status).toList();
 
+  /// Belum dimulai. 'menunggu_dikerjakan' hanya ada pada data lama dari alur
+  /// penugasan; diperlakukan sama seperti 'terdaftar'.
+  List<BusWash> _notStarted() => _appData.operational
+      .where(
+        (bus) =>
+            bus.status == WashStatus.terdaftar ||
+            bus.status == WashStatus.menungguDikerjakan,
+      )
+      .toList();
+
   void _open(Widget page) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
@@ -56,16 +67,50 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     _appData.addBus(result);
   }
 
-  Future<void> _assign(BusWash bus) async {
+  Future<void> _start(BusWash bus) async {
+    if (_busy) return;
+
+    final confirmed = await confirmDialog(
+      context,
+      title: 'Mulai cuci ${bus.plateNumber}?',
+      message: 'Waktu mulai akan dicatat sekarang.',
+      confirmLabel: 'Mulai Cuci',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _busy = true);
+
+    BusWash? started;
+
+    try {
+      started = await WorkService.instance.startJob(bus.id);
+    } on ApiException catch (e) {
+      if (mounted) {
+        showSnack(context, e.message);
+        if (e.statusCode == 409) _appData.refresh();
+      }
+    } catch (_) {
+      if (mounted) showSnack(context, 'Terjadi kesalahan. Coba lagi.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+
+    if (started == null || !mounted) return;
+
+    _appData.addBus(started);
+    await _openWork(started);
+  }
+
+  Future<void> _openWork(BusWash bus) async {
     final result = await Navigator.push<BusWash>(
       context,
-      MaterialPageRoute(builder: (_) => AssignPage(bus: bus)),
+      MaterialPageRoute(builder: (_) => WorkPage(bus: bus)),
     );
 
     if (result == null || !mounted) return;
 
     _appData.addBus(result);
-    showSnack(context, 'Penugasan berhasil disimpan.');
+    showSnack(context, 'Pekerjaan selesai. Lanjutkan dengan memeriksa hasilnya.');
   }
 
   Future<void> _inspect(BusWash bus) async {
@@ -135,7 +180,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
           child: BusCard(
             bus: bus,
             actionLabel: actionLabel,
-            onAction: onAction == null ? null : () => onAction(bus),
+            onAction: (onAction == null || _busy) ? null : () => onAction(bus),
           ),
         ),
       ),
@@ -147,8 +192,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
     return ListenableBuilder(
       listenable: _appData,
       builder: (context, _) {
-        final toAssign = _by(WashStatus.terdaftar);
-        final waiting = _by(WashStatus.menungguDikerjakan);
+        final notStarted = _notStarted();
         final working = _by(WashStatus.dalamPengerjaan);
         final toInspect = _by(WashStatus.menungguPemeriksaan);
         final toExit = _by(WashStatus.selesai);
@@ -160,7 +204,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
 
         return DashboardScaffold(
           greeting: 'Halo, Pengawas',
-          subtitle: 'Kelola bus masuk, penugasan, dan pemeriksaan.',
+          subtitle: 'Kelola bus masuk, pencucian, dan pemeriksaan.',
           onRefresh: _appData.refresh,
           bottomPadding: 96,
           floatingActionButton: FloatingActionButton.extended(
@@ -172,14 +216,14 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
             StatGrid(
               items: [
                 StatCard(
-                  number: '${toAssign.length}',
-                  title: 'Perlu Ditugaskan',
-                  icon: Icons.assignment_ind_outlined,
+                  number: '${notStarted.length}',
+                  title: 'Belum Dimulai',
+                  icon: Icons.access_time,
                   color: Colors.blueGrey,
                 ),
                 StatCard(
-                  number: '${waiting.length + working.length}',
-                  title: 'Berjalan',
+                  number: '${working.length}',
+                  title: 'Dikerjakan',
                   icon: Icons.autorenew,
                   color: Colors.orange,
                 ),
@@ -236,19 +280,13 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
                 ),
               ),
             ],
+            ..._section('Belum Dimulai', notStarted, 'Mulai Cuci', _start),
             ..._section(
-              'Perlu Ditugaskan',
-              toAssign,
-              'Tugaskan Petugas',
-              _assign,
+              'Sedang Dikerjakan',
+              working,
+              'Lanjutkan Pekerjaan',
+              _openWork,
             ),
-            ..._section(
-              'Menunggu Dikerjakan',
-              waiting,
-              'Ganti Petugas',
-              _assign,
-            ),
-            ..._section('Sedang Dikerjakan', working),
             ..._section(
               'Menunggu Pemeriksaan',
               toInspect,
