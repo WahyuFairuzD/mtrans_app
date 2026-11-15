@@ -18,13 +18,14 @@ import type { AppEnv } from '../types'
 
 const work = new Hono<AppEnv>()
 
-work.post('/:id/start', requireRole('pegawai'), async (c) => {
+// Seluruh alur bus (mulai, checklist, selesai, pemeriksaan, keluar) dikerjakan Pengawas.
+work.post('/:id/start', requireRole('pengawas'), async (c) => {
   const id = requireUuid(c.req.param('id'), jobNotFound)
   const job = await startJob(adminClient(c.env), c.get('user'), id)
   return c.json({ message: 'Pekerjaan dimulai.', job })
 })
 
-work.post('/:id/finish', requireRole('pegawai'), async (c) => {
+work.post('/:id/finish', requireRole('pengawas'), async (c) => {
   const id = requireUuid(c.req.param('id'), jobNotFound)
   const job = await finishJob(adminClient(c.env), c.get('user'), id)
   return c.json({ message: 'Pekerjaan selesai dan menunggu pemeriksaan.', job })
@@ -59,7 +60,7 @@ work.get('/:id/checklist', async (c) => {
   return c.json({ data })
 })
 
-work.patch('/:id/checklist/:itemId', requireRole('pegawai'), async (c) => {
+work.patch('/:id/checklist/:itemId', requireRole('pengawas'), async (c) => {
   const id = requireUuid(c.req.param('id'), jobNotFound)
   const itemId = requireUuid(c.req.param('itemId'), checklistNotFound)
 

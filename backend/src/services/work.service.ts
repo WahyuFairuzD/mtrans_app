@@ -10,12 +10,11 @@ const CHECKLIST_COLUMNS = 'id, label, is_required, sort_order, is_done, checked_
 
 const checklistNotFound = () => notFound('Item checklist tidak ditemukan.')
 
+// 'menunggu_dikerjakan' hanya untuk data lama dari alur penugasan yang sudah dihapus.
+const START_FROM = ['terdaftar', 'menunggu_dikerjakan']
+
 type Transition = { from: string; to: string; wrongState: string }
 
-/**
- * Pindah status secara atomik: update hanya berhasil bila status masih `from`,
- * jadi dua permintaan bersamaan tidak bisa sama-sama lolos.
- */
 async function transition(db: Db, user: AuthUser, id: string, t: Transition) {
   const job = await findAccessibleJob(db, id, user)
   if (job.status !== t.from) throw conflict(t.wrongState)
@@ -34,12 +33,40 @@ async function transition(db: Db, user: AuthUser, id: string, t: Transition) {
   return loadJobDetail(db, id)
 }
 
-export const startJob = (db: Db, user: AuthUser, id: string) =>
-  transition(db, user, id, {
-    from: 'menunggu_dikerjakan',
-    to: 'dalam_pengerjaan',
-    wrongState: 'Pekerjaan hanya bisa dimulai saat status Menunggu Dikerjakan.',
-  })
+/**
+ * Pengawas memulai pekerjaan. Checklist disalin oleh trigger database saat
+ * status menjadi dalam_pengerjaan. Pengawas dicatat sebagai pelaksana
+ * (job_assignees) supaya namanya tampil di kartu dan riwayat.
+ */
+export async function startJob(db: Db, user: AuthUser, id: string) {
+  const job = await findAccessibleJob(db, id, user)
+  if (!START_FROM.includes(job.status)) {
+    throw conflict('Pekerjaan hanya bisa dimulai saat status Terdaftar.')
+  }
+
+  const { data, error } = await db
+    .from('wash_jobs')
+    .update({ status: 'dalam_pengerjaan', updated_by: user.id })
+    .eq('id', id)
+    .in('status', START_FROM)
+    .select('id')
+    .maybeSingle()
+
+  if (error) throw dbError(error, 'Gagal mengubah status pekerjaan.')
+  if (!data) throw conflict('Status pekerjaan sudah berubah. Muat ulang data.')
+
+  const { error: assigneeError } = await db
+    .from('job_assignees')
+    .upsert(
+      { job_id: id, pegawai_id: user.id },
+      { onConflict: 'job_id,pegawai_id', ignoreDuplicates: true },
+    )
+  if (assigneeError) {
+    throw dbError(assigneeError, 'Pekerjaan dimulai, tetapi gagal mencatat pelaksana.')
+  }
+
+  return loadJobDetail(db, id)
+}
 
 export const finishJob = (db: Db, user: AuthUser, id: string) =>
   transition(db, user, id, {

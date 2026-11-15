@@ -13,7 +13,6 @@ import {
 } from '../lib/validate'
 import { requireAuth, requireRole } from '../middleware/auth'
 import {
-  assignJob,
   createJob,
   getJob,
   JOB_STATUSES,
@@ -28,8 +27,6 @@ import work from './work'
 const jobs = new Hono<AppEnv>()
 
 jobs.use('*', requireAuth)
-
-const MAX_ASSIGNEES = 20
 
 // Filter yang sama dipakai daftar riwayat dan rekap.
 function parseFilters(c: Context<AppEnv>): JobFilters {
@@ -51,20 +48,6 @@ function parseFilters(c: Context<AppEnv>): JobFilters {
     to: isoDateTime(c.req.query('to'), 'tanggal akhir'),
     q: c.req.query('q')?.trim() || undefined,
   }
-}
-
-function uuidList(v: unknown, label: string, min: number, max: number): string[] {
-  if (!Array.isArray(v)) {
-    throw new ValidationError(`${label} wajib dipilih.`)
-  }
-  const ids = [...new Set(v.map((x) => requiredUuid(x, label)))]
-  if (ids.length < min) {
-    throw new ValidationError(`Pilih minimal ${min} petugas.`)
-  }
-  if (ids.length > max) {
-    throw new ValidationError(`Maksimal ${max} petugas per pekerjaan.`)
-  }
-  return ids
 }
 
 jobs.post('/', requireRole('pengawas'), async (c) => {
@@ -103,26 +86,6 @@ jobs.get('/recap', requireRole('owner', 'pengawas'), async (c) => {
 jobs.get('/:id', async (c) => {
   const id = requireUuid(c.req.param('id'), jobNotFound)
   return c.json(await getJob(adminClient(c.env), c.get('user'), id))
-})
-
-jobs.post('/:id/assign', requireRole('pengawas'), async (c) => {
-  const id = requireUuid(c.req.param('id'), jobNotFound)
-  const raw = await readJson(c)
-
-  const pegawaiIds = uuidList(raw.pegawai_ids, 'Petugas', 1, MAX_ASSIGNEES)
-
-  // undefined -> pertahankan instruksi lama (null ke assign_job).
-  // null atau '' -> hapus instruksi (string kosong, karena assign_job memakai coalesce).
-  const instructions =
-    raw.instructions === undefined
-      ? null
-      : (text(raw.instructions, 'Instruksi', { max: 255 }) ?? '')
-
-  const job = await assignJob(adminClient(c.env), c.get('user'), id, {
-    pegawaiIds,
-    instructions,
-  })
-  return c.json({ message: 'Penugasan berhasil disimpan.', job })
 })
 
 // Mulai/selesai cuci, checklist, pemeriksaan, unit keluar (auth sudah dipasang di atas)

@@ -40,9 +40,30 @@ function isJpeg(bytes: ArrayBuffer): boolean {
   return head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
 }
 
+function assertRange(from: string, to: string) {
+  const days = (Date.parse(to) - Date.parse(from)) / DAY_MS
+  if (days < 0) {
+    throw new ValidationError('Tanggal awal tidak boleh setelah tanggal akhir.')
+  }
+  if (days > MAX_RANGE_DAYS) {
+    throw new ValidationError(`Rentang tanggal maksimal ${MAX_RANGE_DAYS} hari.`)
+  }
+}
+
 attendance.get('/me/today', requireRole('pegawai', 'pengawas'), async (c) => {
   const data = await listMine(adminClient(c.env), c.get('user').id)
   return c.json({ data })
+})
+
+// Riwayat absensi milik sendiri pada rentang tanggal (?from=YYYY-MM-DD&to=YYYY-MM-DD),
+// semua cabang. Dipakai grid riwayat di beranda Petugas.
+attendance.get('/me/range', requireRole('pegawai', 'pengawas'), async (c) => {
+  const from = requiredIsoDate(c.req.query('from'), 'Tanggal awal')
+  const to = requiredIsoDate(c.req.query('to'), 'Tanggal akhir')
+  assertRange(from, to)
+
+  const data = await listForUser(adminClient(c.env), c.get('user').id, from, to)
+  return c.json({ data, from, to })
 })
 
 // Titik kantor tiap cabang + batas jarak absen. Dipakai aplikasi untuk cek jarak
@@ -74,14 +95,7 @@ attendance.get('/user/:id', requireRole('owner'), async (c) => {
   const from = requiredIsoDate(c.req.query('from'), 'Tanggal awal')
   const to = requiredIsoDate(c.req.query('to'), 'Tanggal akhir')
   const branchId = optionalBranchId(c.req.query('branch_id'))
-
-  const days = (Date.parse(to) - Date.parse(from)) / DAY_MS
-  if (days < 0) {
-    throw new ValidationError('Tanggal awal tidak boleh setelah tanggal akhir.')
-  }
-  if (days > MAX_RANGE_DAYS) {
-    throw new ValidationError(`Rentang tanggal maksimal ${MAX_RANGE_DAYS} hari.`)
-  }
+  assertRange(from, to)
 
   const data = await listForUser(adminClient(c.env), userId, from, to, branchId)
   return c.json({ data, from, to })
@@ -154,7 +168,7 @@ attendance.post('/', requireRole('pegawai', 'pengawas'), async (c) => {
   )
 })
 
-// Didaftarkan terakhir supaya tidak bentrok dengan /me/today, /offices, /people, /user/:id dan /today.
+// Didaftarkan terakhir supaya tidak bentrok dengan /me/today, /me/range, /offices, /people, /user/:id dan /today.
 attendance.get('/:id/photo', async (c) => {
   const id = requireUuid(c.req.param('id'), () =>
     notFound('Absensi tidak ditemukan.'),

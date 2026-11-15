@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Jenis kendaraan. Menentukan harga cuci di invoice.
 enum VehicleType {
   bus('bus', 'Bus', 'Cuci Bus', Icons.directions_bus),
   medium(
@@ -20,10 +19,7 @@ enum VehicleType {
 
   final String apiValue;
 
-  /// Nama di aplikasi.
   final String label;
-
-  /// Nama baris di Lampiran invoice.
   final String invoiceLabel;
   final IconData icon;
 
@@ -33,5 +29,4 @@ enum VehicleType {
   );
 }
 
-/// Harga cuci per jenis kendaraan (rupiah).
 typedef PriceList = Map<VehicleType, int>;

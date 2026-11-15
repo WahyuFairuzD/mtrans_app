@@ -36,7 +36,6 @@ class AttendancePerson {
   }
 }
 
-/// Titik kantor satu cabang (dari GET /attendance/offices).
 class BranchOffice {
   const BranchOffice({
     required this.branchId,

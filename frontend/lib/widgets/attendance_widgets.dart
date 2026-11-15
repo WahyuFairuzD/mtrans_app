@@ -8,8 +8,6 @@ import '../services/attendance_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/wib.dart';
 
-// ------------------------------------------------------------------ foto
-
 class AttendancePhotoImage extends StatelessWidget {
   const AttendancePhotoImage({
     super.key,
