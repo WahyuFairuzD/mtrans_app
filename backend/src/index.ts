@@ -12,6 +12,7 @@ import lookups from './routes/lookups'
 import prices from './routes/prices'
 import stock from './routes/stock'
 import units from './routes/units'
+import users from './routes/users'
 import type { AppEnv } from './types'
 
 const app = new Hono<AppEnv>()
@@ -35,6 +36,7 @@ app.route('/jobs', jobs)
 app.route('/stock', stock)
 app.route('/prices', prices)
 app.route('/invoices', invoices)
+app.route('/users', users)
 app.route('/', lookups)
 
 app.notFound((c) => c.json(apiError('NOT_FOUND', 'Endpoint tidak ditemukan.'), 404))
