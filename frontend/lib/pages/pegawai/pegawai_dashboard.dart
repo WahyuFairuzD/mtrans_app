@@ -9,8 +9,6 @@ import '../../widgets/dashboard_scaffold.dart';
 import '../../widgets/entry_card.dart';
 import '../attendance/attendance_page.dart';
 
-/// Beranda Petugas: data diri, absen, dan riwayat absen sendiri.
-/// Petugas tidak lagi punya alur pekerjaan bus (dipegang Pengawas).
 class PegawaiDashboard extends StatefulWidget {
   const PegawaiDashboard({super.key});
 
