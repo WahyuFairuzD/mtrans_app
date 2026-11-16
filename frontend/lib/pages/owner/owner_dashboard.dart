@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/bus_wash.dart';
 import '../../services/app_data.dart';
+import '../../services/auth_service.dart';
 import '../../services/location_settings.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/wib.dart';
@@ -84,10 +85,17 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   }
 
+  /// Nama depan dari akun yang sedang login; 'Owner' bila nama kosong.
+  String get _firstName {
+    final fullName = AuthService.instance.user?.fullName.trim() ?? '';
+    if (fullName.isEmpty) return 'Owner';
+    return fullName.split(RegExp(r'\s+')).first;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_appData, _location]),
+      listenable: Listenable.merge([_appData, _location, AuthService.instance]),
       builder: (context, _) {
         final buses = _appData.operational;
 
@@ -97,7 +105,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
         final enteredToday = buses.where((bus) => bus.date == kToday).length;
 
         return DashboardScaffold(
-          greeting: 'Halo, Owner',
+          greeting: 'Halo, $_firstName',
           subtitle: _location.loaded
               ? 'Operasional hari ini · ${_location.label}'
               : 'Pantau Operasional Cuci Bus Hari Ini',

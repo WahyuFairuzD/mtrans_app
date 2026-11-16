@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/bus_wash.dart';
 import '../../services/api_exception.dart';
 import '../../services/app_data.dart';
+import '../../services/auth_service.dart';
 import '../../services/review_service.dart';
 import '../../services/work_service.dart';
 import '../../utils/dialogs.dart';
@@ -51,6 +52,13 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
             bus.status == WashStatus.menungguDikerjakan,
       )
       .toList();
+
+  /// Nama depan dari akun yang sedang login; 'Pengawas' bila nama kosong.
+  String get _firstName {
+    final fullName = AuthService.instance.user?.fullName.trim() ?? '';
+    if (fullName.isEmpty) return 'Pengawas';
+    return fullName.split(RegExp(r'\s+')).first;
+  }
 
   void _open(Widget page) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
@@ -190,7 +198,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _appData,
+      listenable: Listenable.merge([_appData, AuthService.instance]),
       builder: (context, _) {
         final notStarted = _notStarted();
         final working = _by(WashStatus.dalamPengerjaan);
@@ -203,7 +211,7 @@ class _PengawasDashboardState extends State<PengawasDashboard> {
             _appData.operational.isEmpty;
 
         return DashboardScaffold(
-          greeting: 'Halo, Pengawas',
+          greeting: 'Halo, $_firstName',
           subtitle: 'Kelola bus masuk, pencucian, dan pemeriksaan.',
           onRefresh: _appData.refresh,
           bottomPadding: 96,
