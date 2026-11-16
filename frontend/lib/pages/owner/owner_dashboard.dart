@@ -13,6 +13,7 @@ import '../../widgets/stat_card.dart';
 import '../attendance/owner_attendance_page.dart';
 import '../invoice/invoice_list_page.dart';
 import '../stock/stock_page.dart';
+import '../staff/staff_page.dart';
 import '../units/units_page.dart';
 
 class OwnerDashboard extends StatefulWidget {
@@ -166,6 +167,14 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               icon: Icons.directions_bus_outlined,
               iconColor: Colors.orange,
               onTap: () => _open(const UnitsPage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Kelola Akun',
+              subtitle: 'Tambah dan atur akun Pengawas & Petugas Cuci',
+              icon: Icons.manage_accounts_outlined,
+              iconColor: Colors.purple,
+              onTap: () => _open(const StaffPage()),
             ),
             const SizedBox(height: 28),
             const Text(
