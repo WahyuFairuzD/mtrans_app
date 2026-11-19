@@ -28,6 +28,7 @@ class AppUser {
   final String fullName;
   final String? phone;
   final UserRole role;
+  final int? branchId;
 
   const AppUser({
     required this.id,
@@ -35,6 +36,7 @@ class AppUser {
     required this.fullName,
     required this.role,
     this.phone,
+    this.branchId,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
@@ -44,6 +46,7 @@ class AppUser {
       fullName: (json['full_name'] as String?) ?? '',
       phone: json['phone'] as String?,
       role: UserRole.fromString(json['role'] as String?),
+      branchId: (json['branch_id'] as num?)?.toInt(),
     );
   }
 }

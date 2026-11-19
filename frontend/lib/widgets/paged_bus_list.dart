@@ -5,6 +5,7 @@ import '../services/api_exception.dart';
 import '../services/history_service.dart';
 import '../theme/app_theme.dart';
 import 'bus_card.dart';
+import 'error_state.dart';
 
 /// Daftar bus yang dimuat bertahap dari server sesuai filter.
 class PagedBusList extends StatefulWidget {
@@ -13,10 +14,14 @@ class PagedBusList extends StatefulWidget {
   /// Kalau diisi, tiap kartu punya tombol "Riwayat unit ini".
   final void Function(BusWash bus)? onUnitHistory;
 
+  /// Tampilkan nama cabang di tiap kartu (untuk Owner).
+  final bool showBranch;
+
   const PagedBusList({
     super.key,
     required this.filter,
     this.onUnitHistory,
+    this.showBranch = false,
   });
 
   @override
@@ -153,31 +158,11 @@ class _PagedBusListState extends State<PagedBusList>
     }
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, size: 40, color: Colors.grey),
-              const SizedBox(height: 12),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: _loadFirst,
-                child: const Text('Coba lagi'),
-              ),
-            ],
-          ),
-        ),
-      );
+      return ErrorState(message: _error!, onRetry: _loadFirst);
     }
 
-    final filtered = widget.filter.isActive ||
+    final filtered =
+        widget.filter.isActive ||
         widget.filter.query.trim().isNotEmpty ||
         widget.filter.unitId != null;
 
@@ -213,7 +198,11 @@ class _PagedBusListState extends State<PagedBusList>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      BusCard(bus: bus, showDate: true),
+                      BusCard(
+                        bus: bus,
+                        showDate: true,
+                        showBranch: widget.showBranch,
+                      ),
                       if (onUnit != null && bus.unitId != null)
                         TextButton.icon(
                           onPressed: () => onUnit(bus),
@@ -252,10 +241,7 @@ class _PagedBusListState extends State<PagedBusList>
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textSecondary),
             ),
-            TextButton(
-              onPressed: _loadMore,
-              child: const Text('Coba lagi'),
-            ),
+            TextButton(onPressed: _loadMore, child: const Text('Coba lagi')),
           ],
         ),
       );

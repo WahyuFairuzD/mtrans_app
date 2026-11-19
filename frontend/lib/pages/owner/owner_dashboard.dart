@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../models/bus_wash.dart';
-import '../stock/stock_page.dart';
 import '../../services/app_data.dart';
+import '../../services/auth_service.dart';
+import '../../services/location_settings.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/wib.dart';
 import '../../widgets/bus_card.dart';
+import '../../widgets/dashboard_scaffold.dart';
+import '../../widgets/entry_card.dart';
 import '../../widgets/history_button.dart';
 import '../../widgets/load_notice.dart';
-import '../../widgets/profile_button.dart';
 import '../../widgets/stat_card.dart';
-
-const _logoAsset = 'assets/images/kpbputih.png';
+import '../attendance/owner_attendance_page.dart';
+import '../invoice/invoice_list_page.dart';
+import '../stock/stock_page.dart';
+import '../staff/staff_page.dart';
+import '../units/units_page.dart';
 
 class OwnerDashboard extends StatefulWidget {
   const OwnerDashboard({super.key});
@@ -22,246 +26,198 @@ class OwnerDashboard extends StatefulWidget {
 
 class _OwnerDashboardState extends State<OwnerDashboard> {
   final AppData _appData = AppData.instance;
+  final LocationSettings _location = LocationSettings.instance;
+
+  /// Cabang yang terakhir dipakai memuat data (null = semua cabang).
+  int? _appliedBranch;
+  bool _hasApplied = false;
 
   @override
   void initState() {
     super.initState();
+    _location.addListener(_onLocationChanged);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _appData.refresh();
+      if (mounted) _bootstrap();
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        body: AnimatedBuilder(
-          animation: _appData,
-          builder: (context, _) {
-            final buses = _appData.operational;
-
-            String count(List<WashStatus> statuses) {
-              return '${buses.where((bus) => statuses.contains(bus.status)).length}';
-            }
-
-            final enteredToday = buses
-                .where((bus) => bus.date == kToday)
-                .length;
-
-            return RefreshIndicator(
-              onRefresh: _appData.refresh,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      height: top + 190,
-                      child: Container(
-                        color: AppColors.brand,
-                        padding: EdgeInsets.fromLTRB(20, top + 12, 20, 0),
-                        child: Stack(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const ProfileButton(),
-                                const Spacer(),
-                                Image.asset(
-                                  _logoAsset,
-                                  height: 120,
-                                  fit: BoxFit.contain,
-                                ),
-                              ],
-                            ),
-                            const Positioned(
-                              left: 0,
-                              bottom: 50,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Halo, Owner',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  SizedBox(height: 2),
-                                  Text(
-                                    'Pantau Operasional Cuci Bus Hari Ini',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.fromLTRB(20, top + 150, 20, 28),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          StatGrid(
-                            items: [
-                              StatCard(
-                                number: '$enteredToday',
-                                title: 'Bus Masuk',
-                                icon: Icons.directions_bus,
-                                color: Colors.blue,
-                              ),
-                              StatCard(
-                                number: count([WashStatus.dalamPengerjaan]),
-                                title: 'Dikerjakan',
-                                icon: Icons.autorenew,
-                                color: Colors.orange,
-                              ),
-                              StatCard(
-                                number: count([WashStatus.menungguPemeriksaan]),
-                                title: 'Perlu Diperiksa',
-                                icon: Icons.fact_check_outlined,
-                                color: Colors.purple,
-                              ),
-                              StatCard(
-                                number: count([WashStatus.selesai]),
-                                title: 'Selesai',
-                                icon: Icons.check_circle_outline,
-                                color: Colors.green,
-                              ),
-                              StatCard(
-                                number: count([WashStatus.unitKeluar]),
-                                title: 'Unit Keluar',
-                                icon: Icons.exit_to_app,
-                                color: Colors.blue,
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 14),
-                          _StockEntry(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const StockPage(),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 28),
-                          const Text(
-                            'Operasional Hari Ini',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          LoadNotice(
-                            loading: _appData.loading,
-                            loaded: _appData.loaded,
-                            error: _appData.error,
-                            onRetry: _appData.refresh,
-                          ),
-
-                          if (buses.isEmpty &&
-                              _appData.loaded &&
-                              _appData.error == null)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(30),
-                                child: Text(
-                                  'Belum ada data bus hari ini.',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            )
-                          else
-                            ...buses.map(
-                              (bus) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: BusCard(bus: bus),
-                              ),
-                            ),
-
-                          const SizedBox(height: 10),
-
-                          const HistoryButton(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
+  void dispose() {
+    _location.removeListener(_onLocationChanged);
+    super.dispose();
   }
-}
 
-class _StockEntry extends StatelessWidget {
-  const _StockEntry({required this.onTap});
-  final VoidCallback onTap;
+  Future<void> _bootstrap() async {
+    try {
+      await _location.ensureLoaded();
+    } catch (_) {
+      // Tanpa daftar lokasi, dashboard tetap dicoba dimuat (semua cabang).
+    }
+    // Bila ensureLoaded sukses, listener sudah memuat data; jangan dobel.
+    if (mounted) await _applyLocation();
+  }
+
+  void _onLocationChanged() {
+    if (_location.loaded) _applyLocation();
+  }
+
+  /// Muat ulang operasional bila pilihan lokasi berubah (mis. dari Setting).
+  Future<void> _applyLocation() async {
+    final branch = _location.branchId;
+    if (_hasApplied && branch == _appliedBranch) return;
+
+    _hasApplied = true;
+    _appliedBranch = branch;
+    await _appData.setBranchFilter(branch);
+  }
+
+  Future<void> _refresh() async {
+    try {
+      await _location.ensureLoaded();
+    } catch (_) {
+      // lihat _bootstrap
+    }
+    await _appData.refresh(force: true);
+  }
+
+  void _open(Widget page) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  /// Nama depan dari akun yang sedang login; 'Owner' bila nama kosong.
+  String get _firstName {
+    final fullName = AuthService.instance.user?.fullName.trim() ?? '';
+    if (fullName.isEmpty) return 'Owner';
+    return fullName.split(RegExp(r'\s+')).first;
+  }
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(14),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: const Row(
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_appData, _location, AuthService.instance]),
+      builder: (context, _) {
+        final buses = _appData.operational;
+
+        String count(WashStatus status) =>
+            '${buses.where((bus) => bus.status == status).length}';
+
+        final enteredToday = buses.where((bus) => bus.date == kToday).length;
+
+        return DashboardScaffold(
+          greeting: 'Halo, $_firstName',
+          subtitle: _location.loaded
+              ? 'Operasional hari ini · ${_location.label}'
+              : 'Pantau Operasional Cuci Bus Hari Ini',
+          onRefresh: _refresh,
           children: [
-            CircleAvatar(
-              backgroundColor: Color(0xFFEAF2FF),
-              child: Icon(Icons.inventory_2_outlined, color: Colors.blue),
+            StatGrid(
+              items: [
+                StatCard(
+                  number: '$enteredToday',
+                  title: 'Bus Masuk',
+                  icon: Icons.directions_bus,
+                  color: Colors.blue,
+                ),
+                StatCard(
+                  number: count(WashStatus.dalamPengerjaan),
+                  title: 'Dikerjakan',
+                  icon: Icons.autorenew,
+                  color: Colors.orange,
+                ),
+                StatCard(
+                  number: count(WashStatus.menungguPemeriksaan),
+                  title: 'Perlu Diperiksa',
+                  icon: Icons.fact_check_outlined,
+                  color: Colors.purple,
+                ),
+                StatCard(
+                  number: count(WashStatus.selesai),
+                  title: 'Selesai',
+                  icon: Icons.check_circle_outline,
+                  color: Colors.green,
+                ),
+                StatCard(
+                  number: count(WashStatus.unitKeluar),
+                  title: 'Unit Keluar',
+                  icon: Icons.exit_to_app,
+                  color: Colors.blue,
+                ),
+              ],
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Kelola Stok',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+            const SizedBox(height: 14),
+            EntryCard(
+              title: 'Absensi',
+              subtitle: 'Pantau absensi pegawai per tanggal',
+              icon: Icons.fact_check_outlined,
+              onTap: () => _open(const OwnerAttendancePage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Kelola Stok',
+              subtitle: 'Lihat persediaan dan catat perubahan',
+              icon: Icons.inventory_2_outlined,
+              iconColor: Colors.blue,
+              onTap: () => _open(const StockPage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Invoice',
+              subtitle: 'Buat dan lihat riwayat tagihan',
+              icon: Icons.receipt_long_outlined,
+              iconColor: Colors.green,
+              onTap: () => _open(const InvoiceListPage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Kelola Unit',
+              subtitle: 'Jenis kendaraan, nama armada, dan plat',
+              icon: Icons.directions_bus_outlined,
+              iconColor: Colors.orange,
+              onTap: () => _open(const UnitsPage()),
+            ),
+            const SizedBox(height: 12),
+            EntryCard(
+              title: 'Kelola Akun',
+              subtitle: 'Tambah dan atur akun Pengawas & Petugas Cuci',
+              icon: Icons.manage_accounts_outlined,
+              iconColor: Colors.purple,
+              onTap: () => _open(const StaffPage()),
+            ),
+            const SizedBox(height: 28),
+            const Text(
+              'Operasional Hari Ini',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            LoadNotice(
+              loading: _appData.loading,
+              loaded: _appData.loaded,
+              error: _appData.error,
+              onRetry: _refresh,
+            ),
+            if (buses.isEmpty && _appData.loaded && _appData.error == null)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(30),
+                  child: Text(
+                    'Belum ada data bus hari ini.',
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Lihat persediaan dan catat perubahan',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+                ),
+              )
+            else
+              ...buses.map(
+                (bus) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: BusCard(bus: bus, showBranch: _location.isAll),
+                ),
               ),
-            ),
-            Icon(Icons.chevron_right, color: AppColors.textSecondary),
+            const SizedBox(height: 10),
+            const HistoryButton(),
           ],
-        ),
-      ),
-    ),
-  );
+        );
+      },
+    );
+  }
 }

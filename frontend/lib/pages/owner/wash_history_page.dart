@@ -4,10 +4,10 @@ import '../../models/app_user.dart';
 import '../../models/bus_wash.dart';
 import '../../models/history_filter.dart';
 import '../../services/auth_service.dart';
+import '../../services/location_settings.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/history_filter_sheet.dart';
 import '../../widgets/paged_bus_list.dart';
-import '../../widgets/recap_view.dart';
 import 'unit_history_page.dart';
 
 class WashHistoryPage extends StatefulWidget {
@@ -23,7 +23,31 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
 
   HistoryFilter _filter = const HistoryFilter();
 
-  bool get _isPegawai => AuthService.instance.user?.role == UserRole.pegawai;
+  /// Owner: tunggu pilihan lokasi (Setting) termuat dulu supaya daftar tidak dimuat dua kali.
+  bool _ready = false;
+
+  UserRole? get _role => AuthService.instance.user?.role;
+  bool get _isPegawai => _role == UserRole.pegawai;
+  bool get _isOwner => _role == UserRole.owner;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isOwner) {
+      LocationSettings.instance
+          .ensureLoaded()
+          .catchError((_) {})
+          .whenComplete(() {
+            if (mounted) setState(() => _ready = true);
+          });
+    } else {
+      _ready = true;
+    }
+  }
+
+  /// Owner: cabang mengikuti Setting > Lokasi. Peran lain: dikunci server.
+  HistoryFilter get _effectiveFilter =>
+      _isOwner ? _filter.withBranch(LocationSettings.instance.branchId) : _filter;
 
   @override
   void dispose() {
@@ -59,15 +83,18 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
     Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => UnitHistoryPage(
-          unitId: unitId,
-          plateNumber: bus.plateNumber,
-        ),
+        builder: (_) =>
+            UnitHistoryPage(unitId: unitId, plateNumber: bus.plateNumber),
       ),
     );
   }
 
   Widget _buildSearchBar() {
+    OutlineInputBorder border() => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AppColors.border),
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
@@ -83,14 +110,8 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
+                border: border(),
+                enabledBorder: border(),
               ),
             ),
           ),
@@ -121,48 +142,28 @@ class _WashHistoryPageState extends State<WashHistoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final list = PagedBusList(
-      filter: _filter,
-      onUnitHistory: _isPegawai ? null : _openUnit,
-    );
+    final appBar = AppBar(title: const Text('Riwayat Pencucian'));
 
-    if (_isPegawai) {
+    if (!_ready) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Riwayat Pencucian')),
-        body: Column(
-          children: [
-            _buildSearchBar(),
-            Expanded(child: list),
-          ],
-        ),
+        appBar: appBar,
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Riwayat Pencucian'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Riwayat'),
-              Tab(text: 'Rekap'),
-            ],
-          ),
-        ),
-        body: Column(
-          children: [
-            _buildSearchBar(),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  list,
-                  RecapView(filter: _filter),
-                ],
-              ),
+    return Scaffold(
+      appBar: appBar,
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: PagedBusList(
+              filter: _effectiveFilter,
+              onUnitHistory: _isPegawai ? null : _openUnit,
+              showBranch: _isOwner,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

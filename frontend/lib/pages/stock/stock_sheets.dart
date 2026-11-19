@@ -356,13 +356,16 @@ class _ConfirmRow extends StatelessWidget {
   );
 }
 
-// 5. TAMBAH BARANG BARU
+// ===================== TAMBAH BARANG BARU =====================
 
 class AddStockItemSheet extends StatefulWidget {
-  const AddStockItemSheet({super.key, required this.category});
+  const AddStockItemSheet({super.key, required this.category, this.branchId});
 
   /// Ditentukan oleh tombol "Tambah" yang ditekan di daftar stok.
   final String category;
+
+  /// Cabang tujuan. Wajib untuk Owner; Pengawas memakai cabang akunnya (null).
+  final int? branchId;
 
   @override
   State<AddStockItemSheet> createState() => _AddItemSheetState();
@@ -425,6 +428,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
 
     try {
       final result = await StockService.instance.createItem(
+        branchId: widget.branchId,
         name: name,
         category: widget.category,
         unit: unit,
@@ -471,7 +475,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ---------- Judul: jelas sedang menambah apa ----------
+          // Judul: jelas sedang menambah apa
           Row(
             children: [
               Container(
@@ -514,7 +518,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
           ),
           const SizedBox(height: 20),
 
-          // ---------- Nama ----------
+          // Nama
           _label('Nama barang'),
           TextField(
             controller: _nameController,
@@ -526,7 +530,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
           ),
           const SizedBox(height: 18),
 
-          // ---------- Satuan ----------
+          // Satuan
           _label('Satuan'),
           TextField(
             controller: _unitController,
@@ -552,7 +556,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
           ),
           const SizedBox(height: 18),
 
-          // ---------- Stok awal ----------
+          // Stok awal
           _label('Stok awal (opsional)'),
           TextField(
             controller: _initialController,
@@ -565,7 +569,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
             ),
           ),
 
-          // ---------- Pesan error ----------
+          // Pesan error
           if (_error != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -594,7 +598,7 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
           ],
           const SizedBox(height: 20),
 
-          // ---------- Simpan ----------
+          // Simpan
           SizedBox(
             width: double.infinity,
             height: 52,

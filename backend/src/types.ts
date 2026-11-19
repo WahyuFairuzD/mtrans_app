@@ -13,6 +13,7 @@ export type Profile = {
   phone: string | null
   role: Role
   is_active: boolean
+  branch_id: number | null
 }
 
 export type AuthUser = {
@@ -21,6 +22,7 @@ export type AuthUser = {
   full_name: string
   phone: string | null
   role: Role
+  branch_id: number | null
 }
 
 export type Variables = {

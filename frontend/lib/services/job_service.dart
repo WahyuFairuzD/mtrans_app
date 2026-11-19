@@ -11,9 +11,15 @@ class JobService {
 
   Dio get _dio => ApiClient.dio;
 
-  Future<List<BusWash>> fetchJobs({int limit = 100}) async {
+  Future<List<BusWash>> fetchJobs({int limit = 100, int? branchId}) async {
     try {
-      final res = await _dio.get('/jobs', queryParameters: {'limit': limit});
+      final res = await _dio.get(
+        '/jobs',
+        queryParameters: {
+          'limit': limit,
+          if (branchId != null) 'branch_id': branchId,
+        },
+      );
       final body = res.data as Map<String, dynamic>;
       return (body['data'] as List)
           .cast<Map<String, dynamic>>()
@@ -26,7 +32,6 @@ class JobService {
 
   Future<BusWash> createJob({
     required String unitId,
-    required String locationId,
     required String serviceTypeId,
     String? initialNote,
   }) async {
@@ -35,7 +40,6 @@ class JobService {
         '/jobs',
         data: {
           'unit_id': unitId,
-          'location_id': locationId,
           'service_type_id': serviceTypeId,
           if (initialNote != null && initialNote.isNotEmpty)
             'initial_condition_notes': initialNote,
@@ -72,10 +76,7 @@ class JobService {
     try {
       final res = await _dio.post(
         '/jobs/$jobId/assign',
-        data: {
-          'pegawai_ids': pegawaiIds,
-          'instructions': instructions,
-        },
+        data: {'pegawai_ids': pegawaiIds, 'instructions': instructions},
       );
       final body = res.data as Map<String, dynamic>;
       return BusWash.fromJson(body['job'] as Map<String, dynamic>);

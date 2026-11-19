@@ -7,6 +7,8 @@ export const uuidPattern =
 
 const isoWithZone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
 
+const MAX_SMALLINT = 32767
+
 export class ValidationError extends Error {}
 
 export type JsonObject = Record<string, unknown>
@@ -70,6 +72,28 @@ export function optionalUuid(v: unknown, label: string): string | undefined {
   return requiredUuid(v, label)
 }
 
+/** ID cabang (smallint). Menerima angka (JSON) atau string angka (query/form). */
+export function requiredBranchId(v: unknown, label = 'Cabang'): number {
+  if (v === undefined || v === null || v === '') {
+    throw new ValidationError(`${label} wajib dipilih.`)
+  }
+  const n = typeof v === 'string' ? Number(v) : v
+  if (
+    typeof n !== 'number' ||
+    !Number.isInteger(n) ||
+    n < 1 ||
+    n > MAX_SMALLINT
+  ) {
+    throw new ValidationError(`${label} tidak valid.`)
+  }
+  return n
+}
+
+export function optionalBranchId(v: unknown, label = 'Cabang'): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined
+  return requiredBranchId(v, label)
+}
+
 export function intValue(
   v: unknown,
   label: string,
@@ -112,6 +136,23 @@ export function boolValue(v: unknown, label: string): boolean | undefined {
   return v
 }
 
+/** Angka dari field multipart (selalu string). Kosong atau bukan angka ditolak. */
+export function formNumber(v: unknown, label: string): number {
+  if (typeof v !== 'string' || v.trim() === '') {
+    throw new ValidationError(`${label} wajib diisi.`)
+  }
+  const n = Number(v)
+  if (!Number.isFinite(n)) {
+    throw new ValidationError(`${label} tidak valid.`)
+  }
+  return n
+}
+
+export function optionalFormNumber(v: unknown, label: string): number | null {
+  if (v === undefined || v === null || v === '') return null
+  return formNumber(v, label)
+}
+
 export function isoDateTime(v: unknown, label: string): string | undefined {
   if (v === undefined || v === null || v === '') return undefined
   if (typeof v !== 'string' || !isoWithZone.test(v) || Number.isNaN(Date.parse(v))) {
@@ -128,4 +169,34 @@ export function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
 
 export function safeLike(q: string): string {
   return q.replace(/[%_,()\\]/g, '')
+}
+
+/** Tanggal kalender tanpa jam, format YYYY-MM-DD (mis. 2026-09-24). */
+export function requiredIsoDate(v: unknown, label: string): string {
+  if (v === undefined || v === null || v === '') {
+    throw new ValidationError(`${label} wajib diisi.`)
+  }
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    throw new ValidationError(`Format ${label} tidak valid.`)
+  }
+  const parsed = new Date(`${v}T00:00:00Z`)
+  // Tolak tanggal yang tidak ada di kalender, mis. 2026-02-31.
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== v) {
+    throw new ValidationError(`${label} tidak valid.`)
+  }
+  return v
+}
+
+/** Bilangan bulat positif dari query atau form (selalu berupa teks). */
+export function optionalPositiveInt(
+  v: unknown,
+  label: string,
+  max: number,
+): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined
+  const n = typeof v === 'string' ? Number(v) : v
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > max) {
+    throw new ValidationError(`${label} harus berupa angka 1-${max}.`)
+  }
+  return n
 }

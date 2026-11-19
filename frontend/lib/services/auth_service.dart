@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../models/app_user.dart';
 
@@ -25,8 +26,14 @@ class AuthService extends ChangeNotifier {
 
   static const _accessKey = 'access_token';
   static const _refreshKey = 'refresh_token';
+  static const _attendanceBranchKey = 'attendance_branch_id';
+  static const _installMarkerKey = 'secure_storage_install_marker';
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  // iOS: token tetap bisa dibaca setelah perangkat di-unlock pertama kali
+  // sejak reboot, sehingga sesi tidak hilang saat aplikasi dibuka ulang.
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: ApiConfig.baseUrl,
@@ -39,18 +46,24 @@ class AuthService extends ChangeNotifier {
   AppUser? _user;
   String? _accessToken;
   String? _refreshToken;
+  int? _attendanceBranchId;
   bool _initialized = false;
   Completer<bool>? _refreshing;
 
   AppUser? get user => _user;
   String? get accessToken => _accessToken;
+  int? get attendanceBranchId => _attendanceBranchId ?? _user?.branchId;
   bool get isLoggedIn => _user != null;
   bool get initialized => _initialized;
 
   Future<void> restoreSession() async {
     try {
+      await _clearStaleSessionOnFreshInstall();
       _accessToken = await _storage.read(key: _accessKey);
       _refreshToken = await _storage.read(key: _refreshKey);
+      _attendanceBranchId = int.tryParse(
+        await _storage.read(key: _attendanceBranchKey) ?? '',
+      );
 
       if (_refreshToken != null) {
         await refreshTokens();
@@ -63,9 +76,23 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  /// iOS menyimpan Keychain walau aplikasi dihapus, sehingga token bisa
+  /// terbawa ke instalasi baru. SharedPreferences ikut terhapus saat
+  /// uninstall, jadi penandanya dipakai untuk mendeteksi instalasi baru.
+  Future<void> _clearStaleSessionOnFreshInstall() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_installMarkerKey) == true) return;
+
+    await _storage.deleteAll();
+    await prefs.setBool(_installMarkerKey, true);
+  }
+
   Future<void> login({
     required String email,
     required String password,
+    required Future<int?> Function() selectBranch,
   }) async {
     try {
       final res = await _dio.post(
@@ -73,7 +100,15 @@ class AuthService extends ChangeNotifier {
         data: {'email': email, 'password': password},
       );
 
-      await _applySession(res.data as Map<String, dynamic>);
+      final data = res.data as Map<String, dynamic>;
+      final user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+      final branchId = user.role == UserRole.pegawai
+          ? await selectBranch()
+          : null;
+      if (user.role == UserRole.pegawai && branchId == null) {
+        throw const AuthException('Pilih cabang untuk melanjutkan login.');
+      }
+      await _applySession(data, attendanceBranchId: branchId);
     } on DioException catch (e) {
       throw _toException(e);
     }
@@ -103,6 +138,7 @@ class AuthService extends ChangeNotifier {
   Future<void> verifyOtp({
     required String email,
     required String code,
+    required Future<int?> Function() selectBranch,
   }) async {
     try {
       final res = await _dio.post(
@@ -110,7 +146,15 @@ class AuthService extends ChangeNotifier {
         data: {'email': email, 'code': code},
       );
 
-      await _applySession(res.data as Map<String, dynamic>);
+      final data = res.data as Map<String, dynamic>;
+      final user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+      final branchId = user.role == UserRole.pegawai
+          ? await selectBranch()
+          : null;
+      if (user.role == UserRole.pegawai && branchId == null) {
+        throw const AuthException('Pilih cabang untuk melanjutkan login.');
+      }
+      await _applySession(data, attendanceBranchId: branchId);
     } on DioException catch (e) {
       throw _toException(e);
     }
@@ -122,6 +166,12 @@ class AuthService extends ChangeNotifier {
     } on DioException catch (e) {
       throw _toException(e);
     }
+  }
+
+  Future<void> setAttendanceBranchId(int branchId) async {
+    _attendanceBranchId = branchId;
+    await _storage.write(key: _attendanceBranchKey, value: branchId.toString());
+    notifyListeners();
   }
 
   Future<void> logout() async {
@@ -137,8 +187,7 @@ class AuthService extends ChangeNotifier {
             receiveTimeout: const Duration(seconds: 5),
           ),
         );
-      } catch (_) {
-      }
+      } catch (_) {}
     }
 
     await _clear();
@@ -164,7 +213,10 @@ class AuthService extends ChangeNotifier {
         data: {'refresh_token': refreshToken},
       );
 
-      await _applySession(res.data as Map<String, dynamic>);
+      await _applySession(
+        res.data as Map<String, dynamic>,
+        attendanceBranchId: _attendanceBranchId,
+      );
       completer.complete(true);
       return true;
     } on DioException catch (e) {
@@ -184,13 +236,28 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<void> _applySession(Map<String, dynamic> data) async {
+  Future<void> _applySession(
+    Map<String, dynamic> data, {
+    int? attendanceBranchId,
+  }) async {
     final access = data['access_token'] as String;
     final refresh = data['refresh_token'] as String;
     final user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
 
     await _storage.write(key: _accessKey, value: access);
     await _storage.write(key: _refreshKey, value: refresh);
+
+    _attendanceBranchId = user.role == UserRole.pegawai
+        ? attendanceBranchId
+        : user.branchId;
+    if (_attendanceBranchId != null) {
+      await _storage.write(
+        key: _attendanceBranchKey,
+        value: _attendanceBranchId.toString(),
+      );
+    } else {
+      await _storage.delete(key: _attendanceBranchKey);
+    }
 
     _accessToken = access;
     _refreshToken = refresh;
@@ -202,11 +269,13 @@ class AuthService extends ChangeNotifier {
   Future<void> _clear() async {
     _accessToken = null;
     _refreshToken = null;
+    _attendanceBranchId = null;
     _user = null;
 
     try {
       await _storage.delete(key: _accessKey);
       await _storage.delete(key: _refreshKey);
+      await _storage.delete(key: _attendanceBranchKey);
     } catch (_) {}
 
     notifyListeners();
