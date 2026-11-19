@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 import '../models/app_user.dart';
 
@@ -26,8 +27,13 @@ class AuthService extends ChangeNotifier {
   static const _accessKey = 'access_token';
   static const _refreshKey = 'refresh_token';
   static const _attendanceBranchKey = 'attendance_branch_id';
+  static const _installMarkerKey = 'secure_storage_install_marker';
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  // iOS: token tetap bisa dibaca setelah perangkat di-unlock pertama kali
+  // sejak reboot, sehingga sesi tidak hilang saat aplikasi dibuka ulang.
+  final FlutterSecureStorage _storage = const FlutterSecureStorage(
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: ApiConfig.baseUrl,
@@ -52,6 +58,7 @@ class AuthService extends ChangeNotifier {
 
   Future<void> restoreSession() async {
     try {
+      await _clearStaleSessionOnFreshInstall();
       _accessToken = await _storage.read(key: _accessKey);
       _refreshToken = await _storage.read(key: _refreshKey);
       _attendanceBranchId = int.tryParse(
@@ -67,6 +74,19 @@ class AuthService extends ChangeNotifier {
       _initialized = true;
       notifyListeners();
     }
+  }
+
+  /// iOS menyimpan Keychain walau aplikasi dihapus, sehingga token bisa
+  /// terbawa ke instalasi baru. SharedPreferences ikut terhapus saat
+  /// uninstall, jadi penandanya dipakai untuk mendeteksi instalasi baru.
+  Future<void> _clearStaleSessionOnFreshInstall() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_installMarkerKey) == true) return;
+
+    await _storage.deleteAll();
+    await prefs.setBool(_installMarkerKey, true);
   }
 
   Future<void> login({
