@@ -52,11 +52,14 @@ class _StaffFormSheetState extends State<_StaffFormSheet> {
 
   bool get _isEdit => widget.account != null;
 
+  /// Pengawas Operational bekerja lintas cabang, jadi cabangnya boleh kosong.
+  bool get _branchOptional => _role == UserRole.pengawasOperational;
+
   bool get _valid {
     final phone = _phone.text.trim();
     return _name.text.trim().length >= 2 &&
         (phone.isEmpty || phone.length >= 8) &&
-        _branchId != null &&
+        (_branchId != null || _branchOptional) &&
         (_isEdit ||
             (_emailPattern.hasMatch(_email.text.trim()) &&
                 _password.text.length >= 8)) &&
@@ -102,7 +105,7 @@ class _StaffFormSheetState extends State<_StaffFormSheet> {
               fullName: _name.text.trim(),
               phone: _phone.text.trim(),
               role: _role,
-              branchId: _branchId!,
+              branchId: _branchId,
               isActive: _active,
             )
           : await service.createStaff(
@@ -111,7 +114,7 @@ class _StaffFormSheetState extends State<_StaffFormSheet> {
               password: _password.text,
               phone: _phone.text.trim(),
               role: _role,
-              branchId: _branchId!,
+              branchId: _branchId,
             );
 
       if (!mounted) return;
@@ -212,12 +215,18 @@ class _StaffFormSheetState extends State<_StaffFormSheet> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: [UserRole.pengawas, UserRole.pegawai].map((role) {
+                children: [
+                  UserRole.pengawas,
+                  UserRole.pengawasOperational,
+                  UserRole.pegawai,
+                ].map((role) {
                   return ChoiceChip(
                     avatar: Icon(
-                      role == UserRole.pengawas
-                          ? Icons.manage_accounts_outlined
-                          : Icons.cleaning_services_outlined,
+                      switch (role) {
+                        UserRole.pengawas => Icons.manage_accounts_outlined,
+                        UserRole.pengawasOperational => Icons.fact_check_outlined,
+                        _ => Icons.cleaning_services_outlined,
+                      },
                       size: 18,
                     ),
                     label: Text(role.label),
@@ -229,19 +238,41 @@ class _StaffFormSheetState extends State<_StaffFormSheet> {
               const SizedBox(height: 16),
               const Text('Cabang', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
+              if (_branchOptional)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Pengawas Operational memantau semua cabang. Pilih cabang hanya bila akun ini memang dikhususkan untuk satu cabang.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: widget.branches.map((branch) {
-                  return ChoiceChip(
-                    avatar: const Icon(Icons.location_on_outlined, size: 18),
-                    label: Text(branch.name),
-                    selected: _branchId == branch.id,
-                    onSelected: _saving
-                        ? null
-                        : (_) => setState(() => _branchId = branch.id),
-                  );
-                }).toList(),
+                children: [
+                  if (_branchOptional)
+                    ChoiceChip(
+                      avatar: const Icon(Icons.public, size: 18),
+                      label: const Text('Semua cabang'),
+                      selected: _branchId == null,
+                      onSelected: _saving
+                          ? null
+                          : (_) => setState(() => _branchId = null),
+                    ),
+                  ...widget.branches.map((branch) {
+                    return ChoiceChip(
+                      avatar: const Icon(Icons.location_on_outlined, size: 18),
+                      label: Text(branch.name),
+                      selected: _branchId == branch.id,
+                      onSelected: _saving
+                          ? null
+                          : (_) => setState(() => _branchId = branch.id),
+                    );
+                  }),
+                ],
               ),
               if (_isEdit) ...[
                 const SizedBox(height: 8),

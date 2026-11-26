@@ -1,14 +1,23 @@
 enum UserRole {
   owner,
   pengawas,
+  pengawasOperational,
   pegawai;
 
   static UserRole fromString(String? value) {
     return UserRole.values.firstWhere(
-      (role) => role.name == value,
+      (role) => role.apiValue == value,
       orElse: () => UserRole.pegawai,
     );
   }
+
+  /// Nilai yang dikirim ke API (snake_case, sama dengan nama enum di database).
+  String get apiValue => switch (this) {
+    UserRole.owner => 'owner',
+    UserRole.pengawas => 'pengawas',
+    UserRole.pengawasOperational => 'pengawas_operational',
+    UserRole.pegawai => 'pegawai',
+  };
 
   String get label {
     switch (this) {
@@ -16,6 +25,8 @@ enum UserRole {
         return 'Owner';
       case UserRole.pengawas:
         return 'Pengawas';
+      case UserRole.pengawasOperational:
+        return 'Pengawas Operational';
       case UserRole.pegawai:
         return 'Petugas Cuci';
     }

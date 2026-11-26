@@ -7,7 +7,7 @@ class InvoiceConfig {
       'Jl. Cakalang nomor 20F, Kec Blimbing, Kel Polowijen, Kota Malang';
   static const companyContact =
       'Telp : 082231031037, Email : karyaputrabumi318@gmail.com';
-  static const logoAsset = 'assets/images/kpb.png';
+  static const logoAsset = 'assets/images/LogoKPB.jpeg';
 
   // Alamat penerbit di blok Nomor/Tanggal
   static const issuerAddress = 'Jl. Cakalang No. 102 Kota Malang';
