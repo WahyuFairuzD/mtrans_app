@@ -11,14 +11,15 @@ export type StaffInput = {
   password: string
   phone: string | null
   role: StaffRole
-  branch_id: number
+  /** null hanya untuk Pengawas Operational: perannya mencakup semua cabang. */
+  branch_id: number | null
 }
 
 export type StaffPatch = Partial<{
   full_name: string
   phone: string | null
   role: StaffRole
-  branch_id: number
+  branch_id: number | null
   is_active: boolean
 }>
 
@@ -62,7 +63,7 @@ export async function listStaff(db: Db, query: StaffListQuery) {
   const req = db
     .from('profiles')
     .select(PROFILE_COLUMNS)
-    .in('role', query.role ? [query.role] : ['pengawas', 'pegawai'])
+    .in('role', query.role ? [query.role] : ['pengawas', 'pengawas_operational', 'pegawai'])
     .order('is_active', { ascending: false })
     .order('full_name', { ascending: true })
 
@@ -99,7 +100,7 @@ async function ensureBranchExists(db: Db, branchId: number) {
  * Profil di-upsert supaya hasilnya sama baik trigger auth.users membuat profil atau tidak.
  */
 export async function createStaff(db: Db, input: StaffInput) {
-  await ensureBranchExists(db, input.branch_id)
+  if (input.branch_id !== null) await ensureBranchExists(db, input.branch_id)
 
   const { data, error } = await db.auth.admin.createUser({
     email: input.email,
@@ -157,14 +158,23 @@ export async function createStaff(db: Db, input: StaffInput) {
 export async function updateStaff(db: Db, id: string, patch: StaffPatch) {
   const { data: current, error: currentError } = await db
     .from('profiles')
-    .select('role')
+    .select('role, branch_id')
     .eq('id', id)
     .maybeSingle()
   if (currentError) throw internal(currentError, 'Gagal mengubah akun.')
   // Akun Owner tidak dikelola dari sini.
   if (!current || current.role === 'owner') throw staffNotFound()
 
-  if (patch.branch_id !== undefined) await ensureBranchExists(db, patch.branch_id)
+  const role = patch.role ?? current.role
+  const branchId = patch.branch_id === undefined ? current.branch_id : patch.branch_id
+  // Hanya Pengawas Operational yang boleh tanpa cabang.
+  if (role !== 'pengawas_operational' && branchId === null) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Cabang wajib dipilih untuk peran ini.')
+  }
+
+  if (patch.branch_id !== undefined && patch.branch_id !== null) {
+    await ensureBranchExists(db, patch.branch_id)
+  }
 
   const { data, error } = await db
     .from('profiles')

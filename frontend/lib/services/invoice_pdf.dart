@@ -97,8 +97,8 @@ class InvoicePdf {
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
           pw.SizedBox(
-            width: 78,
-            height: 58,
+            width: 92,
+            height: 72,
             child: pw.Image(logo, fit: pw.BoxFit.contain),
           ),
           pw.Expanded(
@@ -126,7 +126,7 @@ class InvoicePdf {
               ],
             ),
           ),
-          pw.SizedBox(width: 78),
+          pw.SizedBox(width: 92),
         ],
       ),
     );

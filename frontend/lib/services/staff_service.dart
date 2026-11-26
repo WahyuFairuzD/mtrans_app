@@ -33,7 +33,7 @@ class StaffService {
     required String password,
     required String phone,
     required UserRole role,
-    required int branchId,
+    required int? branchId,
   }) async {
     try {
       final res = await _dio.post(
@@ -43,7 +43,7 @@ class StaffService {
           'email': email,
           'password': password,
           'phone': phone.isEmpty ? null : phone,
-          'role': role.name,
+          'role': role.apiValue,
           'branch_id': branchId,
         },
       );
@@ -59,7 +59,7 @@ class StaffService {
     required String fullName,
     required String phone,
     required UserRole role,
-    required int branchId,
+    required int? branchId,
     required bool isActive,
   }) async {
     try {
@@ -68,7 +68,7 @@ class StaffService {
         data: {
           'full_name': fullName,
           'phone': phone.isEmpty ? null : phone,
-          'role': role.name,
+          'role': role.apiValue,
           'branch_id': branchId,
           'is_active': isActive,
         },
