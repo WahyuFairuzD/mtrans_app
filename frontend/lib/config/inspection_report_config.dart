@@ -1,3 +1,15 @@
+/// Bagian armada yang diperiksa Pengawas. [other] menampung item lama yang
+/// tidak termasuk daftar bagian pada laporan inspeksi.
+enum InspectionSection {
+  exterior('Eksterior'),
+  interior('Interior'),
+  other('Lainnya');
+
+  final String label;
+
+  const InspectionSection(this.label);
+}
+
 /// Teks tetap pada laporan inspeksi cuci bus.
 class InspectionReportConfig {
   InspectionReportConfig._();
@@ -58,4 +70,20 @@ class InspectionReportConfig {
     'Jok & Kursi Penumpang',
     'Lantai & Kolong Kursi',
   ];
+
+  /// Label checklist dibandingkan tanpa peduli huruf besar/kecil dan spasi ganda.
+  static String normalizeLabel(String label) =>
+      label.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  /// Bagian armada untuk satu label checklist Pengawas.
+  static InspectionSection sectionOf(String label) {
+    final key = normalizeLabel(label);
+    if (exteriorParts.any((part) => normalizeLabel(part) == key)) {
+      return InspectionSection.exterior;
+    }
+    if (interiorParts.any((part) => normalizeLabel(part) == key)) {
+      return InspectionSection.interior;
+    }
+    return InspectionSection.other;
+  }
 }

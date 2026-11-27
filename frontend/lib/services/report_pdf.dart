@@ -6,10 +6,13 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../config/inspection_report_config.dart';
 import '../models/operational_report.dart';
+import '../models/work.dart';
 import '../utils/wib.dart';
 
 const _black = PdfColor.fromInt(0xFF000000);
 const _headerGray = PdfColor.fromInt(0xFFC8C8C8);
+const _markDone = PdfColor.fromInt(0xFF3FA535);
+const _markPending = PdfColor.fromInt(0xFFB0B0B0);
 const _badgeColors = [
   PdfColor.fromInt(0xFF3FA535),
   PdfColor.fromInt(0xFFF2D024),
@@ -24,6 +27,7 @@ class InspectionReportPdf {
     required ReportableBus bus,
     required OperationalReport report,
     required ReportSigner signer,
+    required List<ChecklistItem> checklist,
     required Uint8List logo,
   }) async {
     final doc = pw.Document(
@@ -68,7 +72,7 @@ class InspectionReportPdf {
           pw.SizedBox(height: 16),
           _sectionTitle('2.', 'TABEL RINCIAN INSPEKSI PER ARMADA'),
           pw.SizedBox(height: 8),
-          _detailTable(bus, report),
+          _detailTable(bus, report, checklist),
           pw.SizedBox(height: 18),
           pw.Inseparable(child: _findingTables(bus, report)),
           pw.SizedBox(height: 26),
@@ -268,7 +272,11 @@ class InspectionReportPdf {
     );
   }
 
-  static pw.Widget _detailTable(ReportableBus bus, OperationalReport report) {
+  static pw.Widget _detailTable(
+    ReportableBus bus,
+    OperationalReport report,
+    List<ChecklistItem> checklist,
+  ) {
     pw.Widget header(String text) => pw.Container(
       color: _headerGray,
       padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 6),
@@ -290,6 +298,35 @@ class InspectionReportPdf {
     final interior = InspectionReportConfig.interiorParts;
     final rows = exterior.length > interior.length ? exterior.length : interior.length;
 
+    // Status tiap bagian diambil dari checklist Pengawas pada pekerjaan ini.
+    // Pekerjaan lama yang checklist-nya masih template generik tidak punya
+    // bagian yang cocok, jadi kolomnya dicetak tanpa tanda.
+    final checked = _checkedParts(checklist);
+    final exteriorMarked = _hasPart(checked, exterior);
+    final interiorMarked = _hasPart(checked, interior);
+
+    pw.Widget part(String label, bool marked) => pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+      alignment: pw.Alignment.topLeft,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          if (marked)
+            pw.Container(
+              width: 7,
+              height: 7,
+              margin: const pw.EdgeInsets.only(top: 2, right: 5),
+              color: checked[InspectionReportConfig.normalizeLabel(label)] ?? false
+                  ? _markDone
+                  : _markPending,
+            ),
+          pw.Expanded(
+            child: pw.Text(label, style: const pw.TextStyle(fontSize: 9)),
+          ),
+        ],
+      ),
+    );
+
     final parts = pw.Table(
       border: pw.TableBorder.all(color: _black, width: 0.6),
       columnWidths: const {
@@ -307,14 +344,18 @@ class InspectionReportPdf {
         for (var i = 0; i < rows; i++)
           pw.TableRow(
             children: [
-              plain(i < exterior.length ? exterior[i] : ''),
-              plain(i < interior.length ? interior[i] : ''),
+              i < exterior.length
+                  ? part(exterior[i], exteriorMarked)
+                  : pw.SizedBox(),
+              i < interior.length
+                  ? part(interior[i], interiorMarked)
+                  : pw.SizedBox(),
             ],
           ),
       ],
     );
 
-    return pw.Table(
+    final table = pw.Table(
       border: pw.TableBorder.all(color: _black, width: 0.6),
       columnWidths: const {
         0: pw.FixedColumnWidth(22),
@@ -345,7 +386,41 @@ class InspectionReportPdf {
         ),
       ],
     );
+
+    if (!exteriorMarked && !interiorMarked) return table;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        table,
+        pw.SizedBox(height: 4),
+        pw.Row(
+          children: [
+            _legendMark(_markDone, 'sudah dicentang Pengawas'),
+            pw.SizedBox(width: 14),
+            _legendMark(_markPending, 'belum dicentang'),
+          ],
+        ),
+      ],
+    );
   }
+
+  /// Label bagian → status centang dari checklist Pengawas pekerjaan ini.
+  static Map<String, bool> _checkedParts(List<ChecklistItem> checklist) => {
+    for (final item in checklist)
+      InspectionReportConfig.normalizeLabel(item.label): item.isDone,
+  };
+
+  static bool _hasPart(Map<String, bool> checked, List<String> parts) => parts
+      .any((part) => checked.containsKey(InspectionReportConfig.normalizeLabel(part)));
+
+  static pw.Widget _legendMark(PdfColor color, String text) => pw.Row(
+    children: [
+      pw.Container(width: 7, height: 7, color: color),
+      pw.SizedBox(width: 4),
+      pw.Text(text, style: const pw.TextStyle(fontSize: 7.5)),
+    ],
+  );
 
   static pw.Widget _findingTables(ReportableBus bus, OperationalReport report) {
     pw.Widget label(String text) => pw.Container(

@@ -10,11 +10,13 @@ import '../../services/api_exception.dart';
 import '../../services/file_share.dart';
 import '../../services/report_pdf.dart';
 import '../../services/report_service.dart';
+import '../../services/work_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/dialogs.dart';
 import '../../utils/wib.dart';
 import '../../widgets/bus_header_card.dart';
 import '../../widgets/error_state.dart';
+import '../../widgets/job_checklist_section.dart';
 import 'report_signer_page.dart';
 
 /// Konfirmasi kondisi after satu armada lalu export laporan inspeksi (PDF).
@@ -197,15 +199,16 @@ class _OperationalReportPageState extends State<OperationalReportPage> {
     setState(() => _exporting = true);
 
     try {
-      final report = await ReportService.instance.saveReport(
-        widget.bus.id,
-        _collect(),
-      );
+      final (report, checklist) = await (
+        ReportService.instance.saveReport(widget.bus.id, _collect()),
+        WorkService.instance.fetchChecklist(widget.bus.id),
+      ).wait;
       final logo = await rootBundle.load(InspectionReportConfig.logoAsset);
       final bytes = await InspectionReportPdf.build(
         bus: widget.bus,
         report: report,
         signer: _signer,
+        checklist: checklist,
         logo: logo.buffer.asUint8List(),
       );
 
@@ -284,6 +287,7 @@ class _OperationalReportPageState extends State<OperationalReportPage> {
         ),
         const SizedBox(height: 20),
         _beforeCard(bus),
+        JobChecklistSection(jobId: bus.id),
         const SizedBox(height: 20),
         _sectionTitle('Data laporan'),
         const SizedBox(height: 10),
