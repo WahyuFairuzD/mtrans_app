@@ -133,21 +133,17 @@ class _Header extends StatelessWidget {
                 ),
                 Positioned(
                   left: 0,
+                  right: 0,
                   bottom: 50,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        greeting,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      GreetingText(text: greeting),
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -189,4 +185,64 @@ class _WavePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+/// Sapaan di header dashboard.
+///
+/// Nama pengguna bisa sangat panjang dan tanpa spasi (mis. akun
+/// "PengawasOperational"), sehingga ukuran huruf diturunkan bertahap sampai
+/// teks muat satu baris. Bila tetap tidak muat pada ukuran terkecil, teks
+/// dipotong dengan elipsis agar tidak terpotong liar oleh tepi layar.
+class GreetingText extends StatelessWidget {
+  const GreetingText({super.key, required this.text});
+
+  final String text;
+
+  /// Ukuran huruf desain awal header.
+  static const double maxFontSize = 28;
+
+  /// Batas bawah agar sapaan tetap terbaca di layar sempit.
+  static const double minFontSize = 16;
+
+  static const TextStyle _style = TextStyle(
+    color: Colors.white,
+    fontWeight: FontWeight.w800,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) => Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: _style.copyWith(
+          fontSize: _fitFontSize(constraints.maxWidth, textScaler),
+        ),
+      ),
+    );
+  }
+
+  /// Ukuran terbesar yang membuat [text] muat dalam satu baris selebar
+  /// [available].
+  double _fitFontSize(double available, TextScaler textScaler) {
+    if (!available.isFinite) return maxFontSize;
+    for (var size = maxFontSize; size > minFontSize; size -= 1) {
+      if (_lineWidth(size, textScaler) <= available) return size;
+    }
+    return minFontSize;
+  }
+
+  double _lineWidth(double size, TextScaler textScaler) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: _style.copyWith(fontSize: size)),
+      textDirection: TextDirection.ltr,
+      textScaler: textScaler,
+      maxLines: 1,
+    )..layout();
+    final width = painter.width;
+    painter.dispose();
+    return width;
+  }
 }
