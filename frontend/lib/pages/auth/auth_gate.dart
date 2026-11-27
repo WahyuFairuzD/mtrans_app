@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../owner/owner_dashboard.dart';
 import '../pegawai/pegawai_dashboard.dart';
 import '../pengawas/pengawas_dashboard.dart';
+import '../pengawas_operational/pengawas_operational_dashboard.dart';
 import 'login_page.dart';
 
 class AuthGate extends StatelessWidget {
@@ -32,6 +33,8 @@ class AuthGate extends StatelessWidget {
             return const OwnerDashboard();
           case UserRole.pengawas:
             return const PengawasDashboard();
+          case UserRole.pengawasOperational:
+            return const PengawasOperationalDashboard();
           case UserRole.pegawai:
             return const PegawaiDashboard();
         }

@@ -98,11 +98,13 @@ class _StaffPageState extends State<StaffPage> {
     await _load(silent: true);
   }
 
-  String _branchName(int? id) {
+  String _branchName(StaffAccount account) {
     for (final branch in _branches) {
-      if (branch.id == id) return branch.name;
+      if (branch.id == account.branchId) return branch.name;
     }
-    return 'Tanpa cabang';
+    return account.role == UserRole.pengawasOperational
+        ? 'Semua cabang'
+        : 'Tanpa cabang';
   }
 
   @override
@@ -161,7 +163,7 @@ class _StaffPageState extends State<StaffPage> {
               separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, i) => _StaffTile(
                 account: _accounts[i],
-                branchName: _branchName(_accounts[i].branchId),
+                branchName: _branchName(_accounts[i]),
                 onTap: () => _openForm(_accounts[i]),
               ),
             ),
@@ -183,7 +185,11 @@ class _StaffTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final inactive = !account.isActive;
-    final isPengawas = account.role == UserRole.pengawas;
+    final roleIcon = switch (account.role) {
+      UserRole.pengawas => Icons.manage_accounts_outlined,
+      UserRole.pengawasOperational => Icons.fact_check_outlined,
+      _ => Icons.cleaning_services_outlined,
+    };
 
     return Material(
       color: Colors.white,
@@ -202,9 +208,7 @@ class _StaffTile extends StatelessWidget {
               CircleAvatar(
                 backgroundColor: const Color(0xFFEAF2FF),
                 child: Icon(
-                  isPengawas
-                      ? Icons.manage_accounts_outlined
-                      : Icons.cleaning_services_outlined,
+                  roleIcon,
                   color: inactive ? Colors.grey : AppColors.brand,
                 ),
               ),

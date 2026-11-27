@@ -28,9 +28,22 @@ users.use('*', requireAuth, requireRole('owner'))
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+const STAFF_ROLES: StaffRole[] = ['pengawas', 'pengawas_operational', 'pegawai']
+
 function parseRole(v: unknown): StaffRole {
-  if (v === 'pengawas' || v === 'pegawai') return v
-  throw new ValidationError('Peran harus Pengawas atau Petugas Cuci.')
+  if (typeof v === 'string' && (STAFF_ROLES as string[]).includes(v)) {
+    return v as StaffRole
+  }
+  throw new ValidationError('Peran harus Pengawas, Pengawas Operational, atau Petugas Cuci.')
+}
+
+/**
+ * Cabang wajib untuk Pengawas dan Petugas Cuci. Pengawas Operational bekerja
+ * lintas cabang, jadi cabangnya boleh kosong.
+ */
+function staffBranch(role: StaffRole, v: unknown): number | null {
+  if (role === 'pengawas_operational') return optionalBranchId(v) ?? null
+  return requiredBranchId(v)
 }
 
 users.get('/', async (c) => {
@@ -54,13 +67,15 @@ users.post('/', async (c) => {
   if (raw.password.length < 8) throw new ValidationError('Password minimal 8 karakter.')
   if (raw.password.length > 72) throw new ValidationError('Password maksimal 72 karakter.')
 
+  const role = parseRole(raw.role)
+
   const user = await createStaff(adminClient(c.env), {
     full_name: requiredText(raw.full_name, 'Nama lengkap', { min: 2, max: 100 }),
     email,
     password: raw.password,
     phone: text(raw.phone, 'Nomor HP', { min: 8, max: 20 }) ?? null,
-    role: parseRole(raw.role),
-    branch_id: requiredBranchId(raw.branch_id),
+    role,
+    branch_id: staffBranch(role, raw.branch_id),
   })
   return c.json({ message: 'Akun berhasil dibuat.', user }, 201)
 })
@@ -69,6 +84,15 @@ users.patch('/:id', async (c) => {
   const id = requireUuid(c.req.param('id'), staffNotFound)
   const raw = await readJson(c)
 
+  // branch_id: null berarti mengosongkan (hanya sah untuk Pengawas Operational).
+  const branchProvided = raw.branch_id !== undefined
+  const branchId =
+    !branchProvided
+      ? undefined
+      : raw.branch_id === null || raw.branch_id === ''
+        ? null
+        : requiredBranchId(raw.branch_id)
+
   const patch = compact({
     full_name:
       raw.full_name === undefined
@@ -76,7 +100,7 @@ users.patch('/:id', async (c) => {
         : requiredText(raw.full_name, 'Nama lengkap', { min: 2, max: 100 }),
     phone: text(raw.phone, 'Nomor HP', { min: 8, max: 20 }),
     role: raw.role === undefined ? undefined : parseRole(raw.role),
-    branch_id: optionalBranchId(raw.branch_id),
+    branch_id: branchId,
     is_active: boolValue(raw.is_active, 'is_active'),
   })
   if (Object.keys(patch).length === 0) {

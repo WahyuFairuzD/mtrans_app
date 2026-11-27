@@ -526,7 +526,10 @@ class _AddItemSheetState extends State<AddStockItemSheet> {
             autofocus: true,
             maxLength: 100,
             textCapitalization: TextCapitalization.sentences,
-            decoration: stockFieldDecoration(hint: _nameHint),
+            decoration: stockFieldDecoration(
+              hint: _nameHint,
+              helper: 'Nama boleh sama dengan barang di kategori lain.',
+            ),
           ),
           const SizedBox(height: 18),
 

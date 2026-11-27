@@ -10,6 +10,7 @@ import invoices from './routes/invoices'
 import jobs from './routes/jobs'
 import lookups from './routes/lookups'
 import prices from './routes/prices'
+import reports from './routes/reports'
 import stock from './routes/stock'
 import units from './routes/units'
 import users from './routes/users'
@@ -36,6 +37,7 @@ app.route('/jobs', jobs)
 app.route('/stock', stock)
 app.route('/prices', prices)
 app.route('/invoices', invoices)
+app.route('/reports', reports)
 app.route('/users', users)
 app.route('/', lookups)
 

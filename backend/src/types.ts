@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'pengawas' | 'pegawai'
+export type Role = 'owner' | 'pengawas' | 'pengawas_operational' | 'pegawai'
 
 export type Bindings = {
   SUPABASE_URL: string
