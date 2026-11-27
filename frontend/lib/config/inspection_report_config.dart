@@ -15,7 +15,7 @@ class InspectionReportConfig {
   InspectionReportConfig._();
 
   static const title = 'LAPORAN HARIAN INSPEKSI CUCI BUS';
-  static const logoAsset = 'assets/images/LogoMtrans.jpeg';
+  static const logoAsset = 'assets/images/logo_mtrans.png';
 
   static const qcRole = 'PIC QC Cuci Bus';
   static const operationalRole = 'PIC Operasional Mtrans';

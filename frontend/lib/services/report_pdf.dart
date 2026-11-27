@@ -104,15 +104,20 @@ class InspectionReportPdf {
     return pw.Table(
       border: pw.TableBorder.all(color: _black, width: 0.8),
       columnWidths: const {
-        0: pw.FixedColumnWidth(148),
+        0: pw.FixedColumnWidth(178),
         1: pw.FlexColumnWidth(1),
       },
       children: [
         pw.TableRow(
           children: [
             pw.Container(
-              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: pw.Image(logo, height: 58, fit: pw.BoxFit.contain),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 16),
+              alignment: pw.Alignment.center,
+              child: pw.SizedBox(
+                width: 166,
+                height: 40,
+                child: pw.Image(logo, fit: pw.BoxFit.contain),
+              ),
             ),
             pw.Container(
               padding: const pw.EdgeInsets.symmetric(vertical: 18, horizontal: 8),
