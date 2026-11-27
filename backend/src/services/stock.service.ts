@@ -92,7 +92,10 @@ export async function createItem(db: Db, user: AuthUser, input: CreateItemInput)
 
   if (error) {
     if (error.code === '23505') {
-      throw conflict('Barang dengan nama tersebut sudah terdaftar di cabang ini.', 'ITEM_EXISTS')
+      throw conflict(
+        'Barang dengan nama tersebut sudah terdaftar di kategori ini.',
+        'ITEM_EXISTS',
+      )
     }
     if (error.code === 'P0001') throw conflict(error.message)
     throw internal(error, 'Gagal menyimpan barang.')
