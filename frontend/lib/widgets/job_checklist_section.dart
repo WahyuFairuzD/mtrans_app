@@ -3,6 +3,7 @@ import '../models/work.dart';
 import '../services/api_exception.dart';
 import '../services/work_service.dart';
 import '../theme/app_theme.dart';
+import 'checklist_group_list.dart';
 
 /// Daftar checklist hasil kerja satu pekerjaan (hanya baca).
 class JobChecklistSection extends StatefulWidget {
@@ -94,29 +95,7 @@ class _JobChecklistSectionState extends State<JobChecklistSection> {
             style: TextStyle(color: AppColors.textSecondary),
           )
         else
-          ..._items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    item.isDone
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    size: 18,
-                    color: item.isDone ? Colors.green : Colors.grey,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item.isRequired ? item.label : '${item.label} (opsional)',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          ChecklistGroupList(items: _items, card: false),
       ],
     );
   }

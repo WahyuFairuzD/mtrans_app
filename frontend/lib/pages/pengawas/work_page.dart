@@ -7,6 +7,7 @@ import '../../services/work_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/dialogs.dart';
 import '../../widgets/bus_header_card.dart';
+import '../../widgets/checklist_group_list.dart';
 import '../../widgets/error_state.dart';
 
 class WorkPage extends StatefulWidget {
@@ -245,27 +246,11 @@ class _WorkPageState extends State<WorkPage> {
             style: TextStyle(color: AppColors.textSecondary),
           )
         else
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: _items
-                  .map(
-                    (item) => CheckboxListTile(
-                      value: item.isDone,
-                      onChanged: (_savingItems.contains(item.id) || _finishing)
-                          ? null
-                          : (v) => _toggle(item, v ?? false),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      title: Text(item.label),
-                      subtitle: item.isRequired ? null : const Text('Opsional'),
-                    ),
-                  )
-                  .toList(),
-            ),
+          ChecklistGroupList(
+            items: _items,
+            onToggle: _toggle,
+            canToggle: (item) =>
+                !_savingItems.contains(item.id) && !_finishing,
           ),
       ],
     );
